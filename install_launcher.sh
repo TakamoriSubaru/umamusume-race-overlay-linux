@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates an "Uma Race Overlay" icon in your application menu AND on your Desktop,
+# Creates an "Umamusume Race Overlay (Linux)" icon in your application menu AND on your Desktop,
 # so you can start everything with a double-click (no terminal needed).
 DIR="$(cd "$(dirname "$0")" && pwd)"
 chmod +x "$DIR"/*.sh
@@ -19,8 +19,8 @@ gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1
 ENTRY="[Desktop Entry]
 Version=1.0
 Type=Application
-Name=Uma Race Overlay
-Comment=Native race overlay for OBS
+Name=Umamusume Race Overlay (Linux)
+Comment=Native Linux race tower for OBS
 Exec=$DIR/start_auto.sh
 Path=$DIR
 Icon=$DIR/icon.png
@@ -36,11 +36,13 @@ update-desktop-database "$APPS" >/dev/null 2>&1
 
 DESK="$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")"
 if [ -d "$DESK" ]; then
-  rm -f "$DESK/Uma Race Overlay.desktop"
-  printf '%s\n' "$ENTRY" > "$DESK/Uma Race Overlay.desktop"
-  chmod +x "$DESK/Uma Race Overlay.desktop"
-  gio set "$DESK/Uma Race Overlay.desktop" metadata::trusted true 2>/dev/null
+  rm -f "$DESK/Uma Race Overlay.desktop"    # icon from older versions
+  NEW="$DESK/Umamusume Race Overlay (Linux).desktop"
+  rm -f "$NEW"
+  printf '%s\n' "$ENTRY" > "$NEW"
+  chmod +x "$NEW"
+  gio set "$NEW" metadata::trusted true 2>/dev/null
 fi
 
-echo "Done! Look for the 'Uma Race Overlay' icon on your Desktop or in the application menu."
+echo "Done! Look for the 'Umamusume Race Overlay (Linux)' icon on your Desktop or in the application menu."
 echo "If the Desktop icon still looks like a plain document: right-click it and choose 'Allow Launching'."

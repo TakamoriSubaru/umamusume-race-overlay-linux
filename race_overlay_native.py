@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Race Overlay (Native Linux)  -  Phase 1
-=======================================
+Umamusume Race Overlay (Linux)
+==============================
 A native Linux window that shows the live race tower, so OBS can capture it
 with a normal "Window Capture (Xcomposite)" source.
 
@@ -44,7 +44,8 @@ from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColorD
 # ──────────────────────────────────────────────────────────────────────────────
 # Constants (logical pixels - the whole drawing scales with the window width)
 # ──────────────────────────────────────────────────────────────────────────────
-APP_VERSION = "1.0.0"
+APP_NAME = "Umamusume Race Overlay (Linux)"
+APP_VERSION = "1.0.1"
 BASE_W = 310
 ROW_H = 48
 HEADER_H = 66
@@ -803,7 +804,7 @@ class OverlayWidget(QWidget):
         self.args = args
         self.cfg = cfg
         self.base = args.server
-        self.setWindowTitle("Race Overlay (Native)")  # <- this is the name you pick in OBS
+        self.setWindowTitle(APP_NAME)  # <- this is the window name you pick in OBS
         self.setMinimumSize(200, 120)
 
         self.s = dict(DEFAULT_SETTINGS)
@@ -1359,7 +1360,7 @@ class OverlayWidget(QWidget):
             return
         self._tray_sig = sig
         self.tray.setIcon(make_tray_icon(self.base_pix, color))
-        self.tray.setToolTip("Uma Race Overlay - " + text)
+        self.tray.setToolTip(APP_NAME + " - " + text)
         self.act_status.setText("Status: " + text)
 
     def restart_now(self):
@@ -1752,7 +1753,7 @@ class SettingsDialog(QDialog):
     def __init__(self, ov):
         super().__init__(None)
         self.ov = ov
-        self.setWindowTitle("Uma Race Overlay - Menu")
+        self.setWindowTitle(APP_NAME + " - Menu")
         icon_path = os.path.join(SCRIPT_DIR, "icon.png")
         if os.path.isfile(icon_path):
             self.setWindowIcon(QIcon(icon_path))
@@ -2149,8 +2150,8 @@ class SettingsDialog(QDialog):
 
 # ──────────────────────────────────────────────────────────────────────────────
 def main():
-    ap = argparse.ArgumentParser(description="Native Linux overlay for Race Overlay (OBS-friendly)")
-    ap.add_argument("--version", action="version", version="Race Overlay (Native) " + APP_VERSION)
+    ap = argparse.ArgumentParser(description=APP_NAME + " - native Linux race tower for OBS")
+    ap.add_argument("--version", action="version", version=APP_NAME + " " + APP_VERSION)
     ap.add_argument("--server", default="http://127.0.0.1:5315", help="Race Overlay server URL")
     ap.add_argument("--demo", metavar="RACE.json", help="replay a saved horseACT race instead of live data")
     ap.add_argument("--watch", nargs="?", const="", default=None, metavar="FOLDER",
@@ -2214,7 +2215,7 @@ def main():
     if tray_ok and (first_run or w.s.get("open_menu", True)):
         QTimer.singleShot(500, w.open_settings)
     if tray_ok and not w.isVisible():
-        w.tray.showMessage("Uma Race Overlay is running",
+        w.tray.showMessage(APP_NAME + " is running",
                            "Click the icon for the menu. Press 'Show overlay window' to show the overlay.",
                            QSystemTrayIcon.MessageIcon.Information, 6000)
     code = app.exec()
