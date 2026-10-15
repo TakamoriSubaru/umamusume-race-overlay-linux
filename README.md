@@ -26,6 +26,7 @@
 - [Use it in OBS](#-use-it-in-obs)
 - [Player pictures and uma faces](#-player-pictures-and-uma-faces)
 - [Modes](#-modes)
+- [Saved races folder](#-saved-races-folder)
 - [Keys and mouse](#-keys-and-mouse)
 - [Command line options](#-command-line-options)
 - [Updating](#-updating)
@@ -42,6 +43,8 @@
 - 🪟 **Native window:** works with OBS Window Capture, optional green background for Chroma Key
 - 🟢 **Tray icon** with a status dot: green = working, yellow = waiting, red = problem, blue = race running
 - 🗂️ **Menu window:** show/hide the overlay, preview race, settings, folder shortcuts
+- 🌙 **Dark settings window** with a pink, yellow and mint theme (new in 1.1.0)
+- 📂 **Saved races folder:** pick the folder in Settings; the folders inside it (Career, Room match, ...) are searched too (new in 1.1.0)
 - 🎨 **Customize:** background colour, text colour, text size, font, always on top, title bar on/off
 - 🖼️ **Player pictures:** every trainer you race against is collected automatically, you just add the pictures
 - 🔁 **One-click switch** between trainer pictures and uma faces (or press **T**)
@@ -136,6 +139,27 @@ The `images/` folder is created next to the program and is not part of this repo
 
 ---
 
+## 📂 Saved races folder
+
+<div align="center">
+<img src="docs/settings-races.png" alt="Settings, Races tab" width="520">
+</div>
+
+Open the **Menu** and go to the **Races** tab:
+
+1. **Where do the races come from?** Choose *Live* (exact, from Race Overlay), *Saved races* (read the race files from a folder), or *Follow the start script* (the default: whatever `MODE` in `settings.sh` says).
+2. **Saved races folder:** press **Browse...** and choose your main folder, for example `Documents/Saved races`. Keep **Also look in the folders inside it** ticked if your files are sorted into folders such as *Career*, *Champions meeting*, *Room match* or *Team trials*.
+3. The window shows how many `.json` files it found. Changing the folder works at once while the program runs. Changing the source asks you to restart.
+
+Good to know:
+
+- The choice made in Settings wins over `settings.sh` and over `--watch FOLDER`. It is saved in `~/.config/race-overlay-native/config.json`.
+- Files that are not races (for example a list of veterans) are skipped automatically.
+- "Reset look to defaults" does **not** reset your folder or source.
+- A race file is written when the race **loads**, not when it starts, so timing can be a little off in saved-races mode. Use the arrow keys in the overlay window to adjust it.
+
+---
+
 ## ⌨️ Keys and mouse
 
 *In the overlay window:*
@@ -196,6 +220,7 @@ start_race_overlay.sh     starts Race Overlay under Wine after the game
 launch_with_game.sh       for the Steam launch option
 install_launcher.sh       creates the menu / Desktop icon
 latest.json.example       example for the online updater
+CHANGELOG.md              what changed in each version
 docs/                     screenshots used by this README
 images/                   your pictures (created automatically, not in the repo)
 backup/                   old versions kept by the updater (not in the repo)
@@ -212,6 +237,7 @@ Settings are stored in `~/.config/race-overlay-native/config.json`.
 | Nothing happens when I double-click the icon | Run `./start_auto.sh` in a terminal and read the error. Also check `/tmp/race-overlay-native.log` if you start it from Steam. |
 | Status stays yellow | The game is not running yet, or its name was not found. The overlay looks for `umamusume` in process names (`GAME_MATCH` in `settings.sh`). |
 | Status is red | Race Overlay is not running or not reachable. Check `/tmp/race-overlay-wine.log` and the paths in `settings.sh`. |
+| `wine: failed to open "C:\Race Overlay\Race Overlay.exe": c0000135` in the log | Wine cannot start Race Overlay. Either it is installed in a different Wine prefix than `WINEPREFIX_DIR` in `settings.sh` (find it with `find ~ -iname "Race Overlay.exe"`), or that prefix is missing a runtime Race Overlay needs. Until it runs, use the **Saved races** source in the Races tab. |
 | OBS shows a black window | Use `--chroma` with a Chroma Key filter. Make sure you are on X11, not Wayland. |
 | OBS cannot find the window | Press **Show overlay window** in the Menu. A hidden window cannot be captured. |
 | No tray icon | Your desktop may not show tray icons. The overlay then stays visible so you can still use it (right-click for the menu). |

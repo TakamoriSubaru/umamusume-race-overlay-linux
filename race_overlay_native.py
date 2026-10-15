@@ -35,17 +35,18 @@ from concurrent.futures import ThreadPoolExecutor
 
 from PyQt6.QtCore import Qt, QThread, QTimer, QUrl, pyqtSignal, QRectF, QPointF
 from PyQt6.QtGui import (QDesktopServices, QIcon, QPainter, QColor, QFont, QPixmap, QPen, QBrush,
-                         QPainterPath, QFontMetrics)
+                         QPainterPath, QFontMetrics, QLinearGradient)
 from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColorDialog, QComboBox,
-                             QDialog, QFileDialog, QFontComboBox, QFormLayout, QHBoxLayout,
-                             QGroupBox, QInputDialog, QLabel, QMenu, QMessageBox, QPushButton, QSlider, QSystemTrayIcon,
+                             QDialog, QFileDialog, QFontComboBox, QFormLayout, QFrame, QHBoxLayout,
+                             QGroupBox, QInputDialog, QLabel, QMenu, QMessageBox, QPushButton, QScrollArea,
+                             QSlider, QSystemTrayIcon,
                              QLineEdit, QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Constants (logical pixels - the whole drawing scales with the window width)
 # ──────────────────────────────────────────────────────────────────────────────
 APP_NAME = "Umamusume Race Overlay (Linux)"
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.1.0"
 BASE_W = 310
 ROW_H = 48
 HEADER_H = 66
@@ -257,7 +258,8 @@ class SseThread(QThread):
                                 d = d[1:]
                             buf.append(d)
             except Exception:
-                self.status.emit("Race Overlay server not reachable yet.\nIs Race Overlay running?")
+                self.status.emit("Race Overlay server not reachable yet.\nIs Race Overlay running?\n"
+                                 "(see /tmp/race-overlay-wine.log)")
             for _ in range(20):
                 if self._stop:
                     return
@@ -337,6 +339,48 @@ def payload_from_saved_race(path):
     return payload, rmap
 
 
+def _safe_listdir(folder):
+    try:
+        return [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
+    except OSError:
+        return []
+
+
+def count_race_files(folder, subfolders=True):
+    """(number of .json files, number of folders that contain some) - used by the Settings window."""
+    files = folders = 0
+    if not folder or not os.path.isdir(folder):
+        return 0, 0
+    if subfolders:
+        walker = os.walk(folder)
+    else:
+        walker = [(folder, [], _safe_listdir(folder))]
+    for _root, _dirs, names in walker:
+        n = sum(1 for f in names if f.lower().endswith(".json"))
+        if n:
+            files += n
+            folders += 1
+    return files, folders
+
+
+def choose_source(args, settings, cfg):
+    """Decides where the races come from. Returns (kind, folder) with kind = "demo", "watch" or "live".
+    The choice made in Settings wins over the start script; an empty choice follows the start script."""
+    if args.demo:
+        return "demo", ""
+    pref = (settings or {}).get("source", "")
+    if pref not in ("live", "watch"):
+        pref = "watch" if args.watch is not None else "live"
+    if pref == "live":
+        return "live", ""
+    folder = os.path.expanduser((settings or {}).get("saved_races_dir", "") or "")
+    if not folder and args.watch:
+        folder = os.path.expanduser(args.watch)
+    if not folder:
+        folder = os.path.expanduser(cfg.get("watch_dir", "") or "")
+    return "watch", folder
+
+
 class ReplayBase(QThread):
     """Plays a saved race by faking the same events the live server would send."""
     race = pyqtSignal(dict, dict)
@@ -399,24 +443,53 @@ class WatchThread(ReplayBase):
     """--watch: watch a folder and play the newest race JSON whenever a new one appears.
     With game_match set, it only works while the game process is running."""
 
-    def __init__(self, folder, speed=1.0, ignore_existing=False, game_match="", quit_with_game=False):
+    def __init__(self, folder, speed=1.0, ignore_existing=False, game_match="", quit_with_game=False,
+                 subfolders=True):
         super().__init__(speed)
         self.folder = folder
+        self.subfolders = subfolders      # also look inside the folders below it (Career, Room match, ...)
         self.ignore_existing = ignore_existing
         self.game_match = game_match
         self.quit_with_game = quit_with_game
         self.last_key = None
         self.bad = set()
+        self._ok = {}                     # (file, mtime, size) -> is it a race file?
         self._last_status = None
+        self._changed = False
+
+    def set_folder(self, folder, subfolders=True):
+        """Called from the Settings window: switch to another folder while the program runs."""
+        self.folder = folder
+        self.subfolders = subfolders
+        self._changed = True
 
     def _say(self, text):
         if text != self._last_status:
             self._last_status = text
             self.status.emit(text)
 
+    def _is_race_file(self, fp, st):
+        """True when the .json really is a saved race (other files, like a veterans list, are skipped).
+        The answer is remembered per file version, so each file is only opened once."""
+        key = (fp, st.st_mtime, st.st_size)
+        if key not in self._ok:
+            try:
+                with open(fp, "r", encoding="utf-8") as f:
+                    d = json.load(f)
+                self._ok[key] = isinstance(d, dict) and "raceHorse" in d and "simDataBase64" in d
+            except Exception:       # unreadable or still being written: checked again when it changes
+                self._ok[key] = False
+        return self._ok[key]
+
     def newest(self):
-        best, best_m = None, -1.0
-        for root, _dirs, files in os.walk(self.folder):
+        if not self.folder:
+            return None
+        if self.subfolders:
+            walker = os.walk(self.folder)
+        else:
+            walker = [(self.folder, [], [f for f in _safe_listdir(self.folder)])]
+        found = []
+        for root, _dirs, files in walker:
             for fn in files:
                 if not fn.lower().endswith(".json"):
                     continue
@@ -427,25 +500,41 @@ class WatchThread(ReplayBase):
                     continue
                 if (fp, st.st_mtime) in self.bad:
                     continue
-                if st.st_mtime > best_m:
-                    best, best_m = (fp, st.st_mtime, st.st_size), st.st_mtime
-        return best
+                found.append((st.st_mtime, fp, st))
+        found.sort(key=lambda x: x[0], reverse=True)       # newest first: only these get opened
+        for m, fp, st in found:
+            if self._is_race_file(fp, st):
+                return (fp, m, st.st_size)
+        return None
 
     def _key(self, n):
         return (n[0], n[1]) if n else None
 
+    def _waiting_text(self):
+        return "Watching saved races\n%s\n\nWaiting for a new race file..." % self.folder
+
     def run(self):
-        if not os.path.isdir(self.folder):
-            self._say("Folder not found:\n%s" % self.folder)
-            while not self._stop:
-                self._sleep(1.0)
-            return
-        waiting = "Watching:\n%s\n\nWaiting for a new race file..." % self.folder
         first = True
         seen_size = None
         was_running = False
         left_at = None
         while not self._stop:
+            if self._changed:                 # the folder was changed in Settings
+                self._changed = False
+                self.bad.clear()
+                self._ok.clear()
+                self.last_key = self._key(self.newest())   # old files in the new folder are not replayed
+                seen_size = None
+                first = False
+            if not self.folder:
+                self._say("Saved races folder not found.\nChoose it in the menu (Races tab, Browse).")
+                self._sleep(1.0)
+                continue
+            if not os.path.isdir(self.folder):
+                self._say("Folder not found:\n%s" % self.folder)
+                self._sleep(1.0)
+                continue
+            waiting = self._waiting_text()
             if self.game_match:
                 running = process_running(self.game_match)
                 if not running:
@@ -487,8 +576,8 @@ class WatchThread(ReplayBase):
                     payload, rmap = payload_from_saved_race(n[0])
                     parse_sim(payload["replay"])
                 except Exception:
-                    self.bad.add((n[0], n[1]))
-                    self.last_key = key
+                    self.bad.add((n[0], n[1]))     # skip this file; the race that is playing is not touched
+                    self._sleep(0.2)
                     continue
                 self.last_key = key
                 age = time.time() - n[1]
@@ -519,7 +608,12 @@ DEFAULT_SETTINGS = {
     "sub_color": "#9898b8",
     "text_scale": 1.0,
     "font": "",                # "" = default font
+    # --- saved races (Races tab) - these are NOT touched by "Reset look to defaults"
+    "source": "",              # "" = follow the start script, "live" = Race Overlay server, "watch" = saved races folder
+    "saved_races_dir": "",     # folder with your saved race JSON files (empty = the one from settings.sh / --watch)
+    "watch_subfolders": True,  # also look inside the folders below it (Career, Room match, ...)
 }
+KEEP_ON_RESET = ("source", "saved_races_dir", "watch_subfolders", "update_url", "open_menu", "show_overlay")
 
 
 STATE_COLORS = {"green": "#2ecc71", "yellow": "#f1c40f", "red": "#e74c3c"}
@@ -816,6 +910,7 @@ class OverlayWidget(QWidget):
         if args.on_top:
             self.s["on_top"] = True
         self.dialog = None
+        self.source_kind = "live"      # set by main(): "live", "watch" or "demo"
         self.tray = None
         self.tray_active = False
         self.quitting = False
@@ -1418,8 +1513,22 @@ class OverlayWidget(QWidget):
             self.show()  # changing window flags hides the window, so show it again
         self.setGeometry(geo)
 
+    def apply_source_choice(self):
+        """Use the source / saved-races folder chosen in Settings.
+        Returns True when it is active now, False when the program has to restart first."""
+        kind, folder = choose_source(self.args, self.s, self.cfg)
+        if kind == "watch" and self.source_kind == "watch" and isinstance(self.source, WatchThread):
+            self.source.set_folder(folder, bool(self.s.get("watch_subfolders", True)))
+            if folder:
+                self.cfg["watch_dir"] = folder
+                save_config(self.cfg)
+            return True
+        return kind == self.source_kind
+
     def reset_settings(self):
+        keep ={k: self.s.get(k, DEFAULT_SETTINGS[k]) for k in KEEP_ON_RESET}
         self.s = dict(DEFAULT_SETTINGS)
+        self.s.update(keep)          # only the look is reset, not your folder / source / update link
         self.save_settings()
         self.apply_flags()
         self.update()
@@ -1749,6 +1858,177 @@ def open_folder(path):
     QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Settings window theme (dark, with pink / yellow / mint accents - colours and shapes only)
+# ──────────────────────────────────────────────────────────────────────────────
+THEME = {"bg": "#17141f", "card": "#221e2e", "card2": "#2b2640", "line": "#3a3354", "input": "#13101a",
+         "text": "#f4eefc", "sub": "#a9a0c4", "pink": "#ff6fae", "pink2": "#ff9a6f", "yellow": "#ffd24a",
+         "mint": "#5de6c2", "violet": "#b56cff", "sky": "#6cb8ff"}
+
+
+def make_check_icon():
+    """Draws the little white tick for the check boxes and returns its file path ('' if it fails)."""
+    try:
+        import tempfile
+        path = os.path.join(tempfile.gettempdir(), "race-overlay-native-check.png")
+        pm = QPixmap(20, 20)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(QColor("#2a1020"), 2.8)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        p.setPen(pen)
+        p.drawPolyline([QPointF(5, 10.5), QPointF(8.5, 14), QPointF(15, 6.5)])
+        p.end()
+        return path if pm.save(path, "PNG") else ""
+    except Exception:
+        return ""
+
+
+def build_theme_qss():
+    t = THEME
+    check = make_check_icon()
+    check_rule = ("image: url(%s);" % check.replace("\\", "/")) if check else ""
+    grad = "qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 %s, stop:1 %s)" % (t["pink"], t["pink2"])
+    return """
+QDialog, QMessageBox, QInputDialog, QFileDialog, QColorDialog { background: %(bg)s; }
+QWidget { color: %(text)s; font-size: 13px; }
+QToolTip { background: %(card2)s; color: %(text)s; border: 1px solid %(pink)s; padding: 4px; }
+QLabel { background: transparent; }
+QScrollArea { background: transparent; border: none; }
+QScrollArea > QWidget > QWidget { background: transparent; }
+QTabWidget::pane { border: 1px solid %(line)s; border-radius: 14px; background: #1c1826; top: -2px; }
+QTabBar { background: transparent; }
+QTabBar::tab { background: %(card2)s; color: #c9c0e6; padding: 9px 22px; margin: 0 6px 8px 0;
+               border-radius: 17px; font-weight: 700; }
+QTabBar::tab:hover:!selected { background: #3a3258; color: #ffffff; }
+QTabBar::tab:selected { background: %(grad)s; color: #2a1020; }
+QGroupBox { background: %(card)s; border: 1px solid %(line)s; border-radius: 14px; margin-top: 20px;
+            padding: 16px 12px 12px 12px; font-weight: 600; }
+QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; left: 14px; padding: 3px 14px;
+                   background: %(yellow)s; color: #3a2a00; border-radius: 11px; font-weight: 800; }
+QPushButton { background: %(card2)s; border: 1px solid #4a4068; border-radius: 12px; padding: 8px 16px;
+              font-weight: 700; }
+QPushButton:hover { background: #3b3259; border-color: %(pink)s; }
+QPushButton:pressed { background: %(pink)s; color: #2a1020; }
+QPushButton:disabled { color: #7a7296; background: %(card)s; border-color: %(line)s; }
+QPushButton#primary { background: %(grad)s; color: #2a1020; border: none; }
+QPushButton#primary:hover { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #ff86bd, stop:1 #ffb085); }
+QPushButton#danger { background: #3a1f33; border-color: #7a3a63; color: #ffc2dc; }
+QPushButton#danger:hover { background: #5a2850; border-color: %(pink)s; }
+QLineEdit, QComboBox, QFontComboBox { background: %(input)s; border: 1px solid #4a4068; border-radius: 10px;
+                                      padding: 6px 10px; selection-background-color: %(pink)s;
+                                      selection-color: #2a1020; }
+QLineEdit:focus, QComboBox:focus { border-color: %(pink)s; }
+QLineEdit:read-only { color: %(sub)s; }
+QComboBox::drop-down { border: none; width: 28px; }
+QComboBox::down-arrow { width: 10px; height: 10px; }
+QComboBox QAbstractItemView { background: %(card)s; border: 1px solid #4a4068; outline: 0;
+                              selection-background-color: %(pink)s; selection-color: #2a1020; }
+QCheckBox { spacing: 10px; background: transparent; }
+QCheckBox::indicator { width: 20px; height: 20px; border-radius: 7px; border: 2px solid #5a4f80;
+                       background: %(input)s; }
+QCheckBox::indicator:hover { border-color: %(pink)s; }
+QCheckBox::indicator:checked { background: %(mint)s; border-color: %(mint)s; %(check)s }
+QSlider::groove:horizontal { height: 8px; background: %(input)s; border: 1px solid %(line)s; border-radius: 5px; }
+QSlider::sub-page:horizontal { background: %(grad)s; border-radius: 5px; }
+QSlider::handle:horizontal { background: #ffffff; border: 3px solid %(pink)s; width: 14px; height: 14px;
+                             margin: -8px 0; border-radius: 10px; }
+QTableWidget { background: %(input)s; alternate-background-color: #191521; border: 1px solid %(line)s;
+               border-radius: 12px; gridline-color: transparent;
+               selection-background-color: rgba(255,111,174,95); selection-color: #ffffff; outline: 0; }
+QTableWidget::item { padding: 5px; }
+QHeaderView::section { background: %(card2)s; color: %(yellow)s; border: none; padding: 8px; font-weight: 800; }
+QTableCornerButton::section { background: %(card2)s; border: none; }
+QTreeView, QListView { background: %(input)s; border: 1px solid %(line)s; border-radius: 8px; outline: 0;
+                       selection-background-color: rgba(255,111,174,95); }
+QScrollBar:vertical { background: transparent; width: 12px; margin: 2px; }
+QScrollBar::handle:vertical { background: #4d4470; border-radius: 4px; min-height: 30px; }
+QScrollBar::handle:vertical:hover { background: %(pink)s; }
+QScrollBar:horizontal { background: transparent; height: 12px; margin: 2px; }
+QScrollBar::handle:horizontal { background: #4d4470; border-radius: 4px; min-width: 30px; }
+QScrollBar::handle:horizontal:hover { background: %(pink)s; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
+""" % dict(t, grad=grad, check=check_rule)
+
+
+class Banner(QWidget):
+    """The coloured title strip at the top of the Settings window. Drawn with code only
+    (gradient, sparkles, a chequered finish line): no game artwork is used."""
+
+    def __init__(self, title, subtitle):
+        super().__init__()
+        self.title, self.subtitle = title, subtitle
+        self.setFixedHeight(92)
+
+    def paintEvent(self, _ev):
+        t = THEME
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = self.width(), self.height()
+        rect = QRectF(0, 0, w, h)
+        path = QPainterPath()
+        path.addRoundedRect(rect, 20, 20)
+        g = QLinearGradient(0, 0, w, h)
+        g.setColorAt(0.0, QColor(t["pink"]))
+        g.setColorAt(0.55, QColor(t["violet"]))
+        g.setColorAt(1.0, QColor(t["sky"]))
+        p.fillPath(path, QBrush(g))
+        p.setClipPath(path)
+        # speed lines
+        p.setPen(QPen(QColor(255, 255, 255, 40), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        for i, (y, x0, ln) in enumerate(((18, 0.50, 0.22), (34, 0.58, 0.16), (50, 0.46, 0.26), (66, 0.62, 0.14))):
+            p.drawLine(QPointF(w * x0, y), QPointF(w * (x0 + ln), y))
+        # chequered finish line on the right
+        cell = 11
+        cols = 4
+        x_start = w - cols * cell - 18
+        for r in range(0, int(h // cell) + 1):
+            for c in range(cols):
+                if (r + c) % 2 == 0:
+                    p.fillRect(QRectF(x_start + c * cell, r * cell + 4, cell, cell), QColor(255, 255, 255, 210))
+                else:
+                    p.fillRect(QRectF(x_start + c * cell, r * cell + 4, cell, cell), QColor(30, 20, 50, 170))
+        # sparkles
+        p.setPen(Qt.PenStyle.NoPen)
+        for (sx, sy, sr, col) in ((0.40, 0.30, 7, t["yellow"]), (0.47, 0.72, 5, "#ffffff"),
+                                  (0.66, 0.26, 4, "#ffffff"), (0.72, 0.68, 6, t["yellow"])):
+            self._star(p, w * sx - 20, h * sy, sr, QColor(col))
+        # text
+        p.setClipping(False)
+        f = QFont(self.font())
+        f.setPointSize(19)
+        f.setWeight(QFont.Weight.ExtraBold)
+        p.setFont(f)
+        p.setPen(QColor(0, 0, 0, 70))
+        p.drawText(QRectF(23, 13, w - 120, 42), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self.title)
+        p.setPen(QColor("#ffffff"))
+        p.drawText(QRectF(22, 11, w - 120, 42), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self.title)
+        f2 = QFont(self.font())
+        f2.setPointSize(10)
+        f2.setWeight(QFont.Weight.DemiBold)
+        p.setFont(f2)
+        p.setPen(QColor(255, 255, 255, 225))
+        p.drawText(QRectF(22, 54, w - 120, 26), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self.subtitle)
+        p.end()
+
+    @staticmethod
+    def _star(p, cx, cy, r, color):
+        path = QPainterPath()
+        path.moveTo(cx, cy - r)
+        path.quadTo(cx, cy, cx + r, cy)
+        path.quadTo(cx, cy, cx, cy + r)
+        path.quadTo(cx, cy, cx - r, cy)
+        path.quadTo(cx, cy, cx, cy - r)
+        p.fillPath(path, QBrush(color))
+
+
+SOURCE_CHOICES = (("", "Follow the start script (MODE in settings.sh)"),
+                  ("live", "Live: exact race clock from Race Overlay"),
+                  ("watch", "Saved races: read the race files from a folder"))
+
+
 class SettingsDialog(QDialog):
     def __init__(self, ov):
         super().__init__(None)
@@ -1757,10 +2037,17 @@ class SettingsDialog(QDialog):
         icon_path = os.path.join(SCRIPT_DIR, "icon.png")
         if os.path.isfile(icon_path):
             self.setWindowIcon(QIcon(icon_path))
-        self.resize(660, 700)
+        self.resize(680, 780)
+        self.setStyleSheet(build_theme_qss())
         lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 16, 16, 14)
+        lay.setSpacing(12)
+        lay.addWidget(Banner("Race Overlay", "Linux edition  ·  version %s  ·  settings" % APP_VERSION))
         tabs = QTabWidget()
+        tabs.setDocumentMode(False)
         lay.addWidget(tabs)
+        self.count_job = None
+        self._count_again = False
 
         # ---- Menu tab
         mt = QWidget()
@@ -1771,6 +2058,7 @@ class SettingsDialog(QDialog):
         mv.addWidget(self.lbl_state)
         row_b = QHBoxLayout()
         self.btn_show = QPushButton("Show overlay window")
+        self.btn_show.setObjectName("primary")
         self.btn_show.clicked.connect(lambda: ov.set_overlay_visible(not ov.isVisible()))
         self.btn_prev2 = QPushButton("Show preview race")
         self.btn_prev2.clicked.connect(lambda: ov.set_preview(not ov.preview))
@@ -1830,9 +2118,74 @@ class SettingsDialog(QDialog):
 
         mv.addStretch(1)
         bq = QPushButton("Quit the overlay program")
+        bq.setObjectName("danger")
         bq.clicked.connect(ov.quit_app)
         mv.addWidget(bq)
-        tabs.addTab(mt, "Menu")
+        sa = QScrollArea()                 # scrolls on small screens instead of squeezing the texts
+        sa.setWidgetResizable(True)
+        sa.setFrameShape(QFrame.Shape.NoFrame)
+        sa.setWidget(mt)
+        tabs.addTab(sa, "Menu")
+
+        # ---- Races tab (where the races come from + the saved races folder)
+        rt = QWidget()
+        rv = QVBoxLayout(rt)
+        sbox = QGroupBox("Where do the races come from?")
+        sl = QVBoxLayout(sbox)
+        self.cmb_source = QComboBox()
+        for _value, text in SOURCE_CHOICES:
+            self.cmb_source.addItem(text)
+        cur = ov.s.get("source", "")
+        self.cmb_source.setCurrentIndex(next((i for i, (v, _t) in enumerate(SOURCE_CHOICES) if v == cur), 0))
+        self.cmb_source.activated.connect(self.on_source)
+        sl.addWidget(self.cmb_source)
+        self.lbl_source = QLabel()
+        self.lbl_source.setWordWrap(True)
+        sl.addWidget(self.lbl_source)
+        rv.addWidget(sbox)
+
+        fbox = QGroupBox("Saved races folder")
+        fl = QVBoxLayout(fbox)
+        hint = QLabel("The folder where your race files (horseACT .json) are saved, for example "
+                      "<i>Documents/Saved races</i>. Choose the main folder: the folders inside it "
+                      "(Career, Champions meeting, Room match, ...) are searched too.")
+        hint.setWordWrap(True)
+        fl.addWidget(hint)
+        frow = QHBoxLayout()
+        self.ed_races = QLineEdit(ov.s.get("saved_races_dir", ""))
+        self.ed_races.setPlaceholderText("(not chosen yet)")
+        self.ed_races.editingFinished.connect(self.on_races_text)
+        self.btn_browse = QPushButton("Browse...")
+        self.btn_browse.setObjectName("primary")
+        self.btn_browse.clicked.connect(self.browse_races)
+        frow.addWidget(self.ed_races, 1)
+        frow.addWidget(self.btn_browse)
+        fl.addLayout(frow)
+        self.cb_sub = QCheckBox("Also look in the folders inside it")
+        self.cb_sub.setChecked(bool(ov.s.get("watch_subfolders", True)))
+        self.cb_sub.toggled.connect(self.on_subfolders)
+        fl.addWidget(self.cb_sub)
+        self.lbl_found = QLabel("")
+        self.lbl_found.setWordWrap(True)
+        fl.addWidget(self.lbl_found)
+        bo2 = QPushButton("Open folder")
+        bo2.clicked.connect(self.open_races_folder)
+        fl.addWidget(bo2)
+        rv.addWidget(fbox)
+
+        wbox = QGroupBox("Good to know")
+        wl = QVBoxLayout(wbox)
+        know = QLabel("A saved race file is written when the race <b>loads</b>, not when it starts, "
+                      "so with saved races the timing can be a little off. Use the arrow keys in the overlay "
+                      "window to adjust it. Live mode is always exact.<br><br>"
+                      "Files that are not races (for example a list of veterans) are skipped automatically.")
+        know.setWordWrap(True)
+        wl.addWidget(know)
+        rv.addWidget(wbox)
+        rv.addStretch(1)
+        tabs.addTab(rt, "Races")
+        self.update_source_label()
+        self.refresh_count()
 
         # ---- Look tab
         look = QWidget()
@@ -1919,6 +2272,9 @@ class SettingsDialog(QDialog):
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setAlternatingRowColors(True)
+        self.table.setShowGrid(False)
         self.table.setColumnWidth(0, 160)
         self.table.setColumnWidth(1, 55)
         self.table.setColumnWidth(2, 130)
@@ -1927,6 +2283,8 @@ class SettingsDialog(QDialog):
         for text, fn in (("Choose picture...", self.choose_file), ("Paste link...", self.paste_link),
                          ("Remove picture", self.remove_pic), ("Add trainer...", self.add_trainer)):
             b = QPushButton(text)
+            if text.startswith("Choose"):
+                b.setObjectName("primary")
             b.clicked.connect(fn)
             br.addWidget(b)
         v.addLayout(br)
@@ -1937,6 +2295,107 @@ class SettingsDialog(QDialog):
         self.timer = QTimer(self)      # keeps the preview tick-box and trainer list up to date
         self.timer.timeout.connect(self.poll)
         self.timer.start(1500)
+
+    # ---- races tab
+    def races_folder(self):
+        return os.path.expanduser(self.ed_races.text().strip())
+
+    def update_source_label(self):
+        ov = self.ov
+        names = {"live": "Live (from Race Overlay)", "watch": "Saved races folder", "demo": "Demo file"}
+        kind, folder = choose_source(ov.args, ov.s, ov.cfg)
+        text = "Running now: <b>%s</b>." % names.get(ov.source_kind, ov.source_kind)
+        if kind != ov.source_kind:
+            text += "<br>After a restart: <b>%s</b>." % names.get(kind, kind)
+        if kind == "watch" and not folder:
+            text += "<br><span style='color:%s'>Choose the saved races folder below first.</span>" % THEME["yellow"]
+        self.lbl_source.setText(text)
+
+    def refresh_count(self):
+        folder = self.races_folder()
+        if not folder:
+            self.lbl_found.setText("No folder chosen yet.")
+            return
+        if not os.path.isdir(folder):
+            self.lbl_found.setText("<span style='color:%s'>That folder was not found.</span>" % THEME["pink"])
+            return
+        if self.count_job is not None and self.count_job.isRunning():
+            self._count_again = True
+            return
+        sub = self.cb_sub.isChecked()
+        self.lbl_found.setText("Looking...")
+        self.count_job = Job(lambda: count_race_files(folder, sub))
+        self.count_job.done.connect(self.on_count)
+        self.count_job.failed.connect(lambda msg: self.lbl_found.setText("Could not read the folder: " + msg))
+        self.count_job.start()
+
+    def on_count(self, res):
+        files, folders = res
+        if files:
+            self.lbl_found.setText("<span style='color:%s'>Found %d .json file%s in %d folder%s.</span>"
+                                   % (THEME["mint"], files, "" if files == 1 else "s", folders,
+                                      "" if folders == 1 else "s"))
+        else:
+            self.lbl_found.setText("<span style='color:%s'>No .json files found there yet.</span>" % THEME["yellow"])
+        if self._count_again:
+            self._count_again = False
+            self.refresh_count()
+
+    def apply_choice(self):
+        """Tell the program about the new source / folder; restart it when that is needed."""
+        ov = self.ov
+        self.update_source_label()
+        kind, folder = choose_source(ov.args, ov.s, ov.cfg)
+        if kind == "watch" and not folder:
+            return                       # nothing to watch yet: wait until a folder is chosen
+        if ov.apply_source_choice():
+            self.update_source_label()
+            return
+        if QMessageBox.question(self, "Restart",
+                                "The program has to restart to use the new choice.\nRestart now?"
+                                ) == QMessageBox.StandardButton.Yes:
+            ov.restart_now()
+
+    def on_source(self, idx):
+        self.ov.set_setting("source", SOURCE_CHOICES[idx][0])
+        self.apply_choice()
+
+    def set_races_folder(self, path):
+        self.ed_races.setText(path)
+        self.ov.set_setting("saved_races_dir", path)
+        self.refresh_count()
+        ov = self.ov
+        if path and os.path.isdir(path) and choose_source(ov.args, ov.s, ov.cfg)[0] == "live" \
+                and ov.source_kind == "live":
+            if QMessageBox.question(self, "Saved races",
+                                    "The overlay is using Live mode right now.\n"
+                                    "Use the saved races folder instead?") == QMessageBox.StandardButton.Yes:
+                ov.set_setting("source", "watch")
+                self.cmb_source.setCurrentIndex(2)
+        self.apply_choice()
+
+    def on_races_text(self):
+        path = self.ed_races.text().strip()
+        if path != self.ov.s.get("saved_races_dir", ""):
+            self.set_races_folder(path)
+
+    def browse_races(self):
+        start = self.races_folder() if os.path.isdir(self.races_folder()) else os.path.expanduser("~")
+        path = QFileDialog.getExistingDirectory(self, "Choose the Saved races folder", start)
+        if path:
+            self.set_races_folder(path)
+
+    def on_subfolders(self, on):
+        self.ov.set_setting("watch_subfolders", bool(on))
+        self.refresh_count()
+        self.apply_choice()
+
+    def open_races_folder(self):
+        folder = self.races_folder()
+        if folder and os.path.isdir(folder):
+            open_folder(folder)
+        else:
+            QMessageBox.information(self, "Saved races", "Choose the folder first (Browse...).")
 
     # ---- updates
     def ask_install(self, files, source, restart=True):
@@ -2031,7 +2490,8 @@ class SettingsDialog(QDialog):
         btn.setText(color)
         c = QColor(color)
         fg = "#000000" if c.lightness() > 128 else "#ffffff"
-        btn.setStyleSheet("background-color:%s;color:%s;border:1px solid #888;padding:4px;" % (color, fg))
+        btn.setStyleSheet("background-color:%s;color:%s;border:2px solid rgba(255,255,255,90);border-radius:10px;"
+                          "padding:6px;font-weight:700;" % (color, fg))
 
     def sync_widgets(self):
         s = self.ov.s
@@ -2190,19 +2650,22 @@ def main():
         app.setWindowIcon(QIcon(icon_path))
     cfg = load_config()
     w = OverlayWidget(args, cfg)
-    if args.watch is not None:
-        folder = os.path.expanduser(args.watch or cfg.get("watch_dir", ""))
-        if not folder:
-            print("No folder saved yet. Use: --watch \"/path/to/Saved races/Room match\"")
+    kind, folder = choose_source(args, w.s, cfg)
+    if kind == "watch":
+        if not folder and args.watch is not None and not w.s.get("source"):
+            print("No folder saved yet. Use: --watch \"/path/to/Saved races\"")
             sys.exit(1)
-        cfg["watch_dir"] = folder
-        save_config(cfg)
+        if folder:
+            cfg["watch_dir"] = folder
+            save_config(cfg)
         src = WatchThread(folder, args.demo_speed, args.ignore_existing,
-                          args.game_match if args.game_linked else "", args.quit_with_game)
-    elif args.demo:
+                          args.game_match if args.game_linked else "", args.quit_with_game,
+                          subfolders=bool(w.s.get("watch_subfolders", True)))
+    elif kind == "demo":
         src = DemoThread(args.demo, args.demo_speed)
     else:
         src = SseThread(args.server, args.game_match if args.game_linked else "", args.quit_with_game)
+    w.source_kind = kind
     w.attach(src)
     first_run = "settings" not in cfg
     if first_run:
