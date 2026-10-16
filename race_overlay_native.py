@@ -36,8 +36,8 @@ from concurrent.futures import ThreadPoolExecutor
 from PyQt6.QtCore import Qt, QThread, QTimer, QUrl, pyqtSignal, QRectF, QPointF
 from PyQt6.QtGui import (QDesktopServices, QIcon, QPainter, QColor, QFont, QPixmap, QPen, QBrush,
                          QPainterPath, QFontMetrics, QLinearGradient)
-from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColorDialog, QComboBox,
-                             QDialog, QFileDialog, QFontComboBox, QFormLayout, QFrame, QHBoxLayout,
+from PyQt6.QtWidgets import (QAbstractItemView, QAbstractSpinBox, QApplication, QCheckBox, QColorDialog, QComboBox,
+                             QDialog, QDoubleSpinBox, QFileDialog, QFontComboBox, QFormLayout, QFrame, QHBoxLayout,
                              QGroupBox, QInputDialog, QLabel, QMenu, QMessageBox, QPushButton, QScrollArea,
                              QSlider, QSystemTrayIcon,
                              QLineEdit, QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
@@ -46,7 +46,8 @@ from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColorD
 # Constants (logical pixels - the whole drawing scales with the window width)
 # ──────────────────────────────────────────────────────────────────────────────
 APP_NAME = "Umamusume Race Overlay (Linux)"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
+SLIDE_SECONDS = 0.45       # how long the tower takes to slide in / out
 BASE_W = 310
 ROW_H = 48
 HEADER_H = 66
@@ -392,6 +393,7 @@ class ReplayBase(QThread):
         super().__init__()
         self.speed = speed
         self.offset = 0.0     # sync nudge in seconds (arrow keys in the window change it)
+        self.delay = 0.0      # saved races only: seconds from "file saved" to "gates open"
         self._stop = False
 
     def stop(self):
@@ -402,7 +404,9 @@ class ReplayBase(QThread):
         while time.monotonic() < end and not self._stop:
             time.sleep(0.02)
 
-    def play(self, payload, rmap, interrupt=None, t0=0.0, preroll=1.0):
+    def play(self, payload, rmap, interrupt=None, t0=0.0, preroll=1.0, delay=0.0):
+        """delay = seconds the race really starts AFTER t0 = 0. Until then nothing is sent, so the
+        overlay stays hidden (the game writes the race file when the race loads, not when it starts)."""
         sim = parse_sim(payload["replay"])
         max_t = max((r["finishTimeRaw"] for r in sim["results"]), default=sim["times"][-1])
         self.race.emit(payload, rmap)
@@ -410,19 +414,22 @@ class ReplayBase(QThread):
             self._sleep(preroll)
         start = time.monotonic()
         ticks = 0
+        sent = False
         while not self._stop:
-            t = (time.monotonic() - start) * self.speed + t0 + self.offset
+            ticks += 1
+            if interrupt and ticks % 10 == 0 and interrupt():
+                break
+            t = (time.monotonic() - start) * self.speed + t0 + self.offset - delay
             if t < 0:                      # race has not started yet: show nothing
                 self._sleep(0.1)
                 continue
             if t > max_t + 2:
                 break
-            ticks += 1
-            if interrupt and ticks % 10 == 0 and interrupt():
-                break
+            sent = True
             self.clock.emit({"type": "clock", "active": True, "time": t, "aiStates": {}})
             self._sleep(0.1)
-        self.clock.emit({"type": "clock", "active": False, "time": 0})
+        if sent:
+            self.clock.emit({"type": "clock", "active": False, "time": 0})
 
 
 class DemoThread(ReplayBase):
@@ -586,7 +593,8 @@ class WatchThread(ReplayBase):
                 self.play(payload, rmap,
                           interrupt=lambda: (self._key(self.newest()) != self.last_key
                                              or bool(self.game_match and not process_running(self.game_match))),
-                          t0=age if fresh else 0.0, preroll=0.0 if fresh else 1.0)
+                          t0=age if fresh else 0.0, preroll=0.0 if fresh else 1.0,
+                          delay=self.delay if fresh else 0.0)
                 self._say(waiting)
                 continue
             self._sleep(1.0)
@@ -612,8 +620,13 @@ DEFAULT_SETTINGS = {
     "source": "",              # "" = follow the start script, "live" = Race Overlay server, "watch" = saved races folder
     "saved_races_dir": "",     # folder with your saved race JSON files (empty = the one from settings.sh / --watch)
     "watch_subfolders": True,  # also look inside the folders below it (Career, Room match, ...)
+    "start_delay": 12.0,       # saved races: seconds from "race file saved" to "gates open"
+    # --- when the overlay shows
+    "auto_hide": True,         # window is hidden until a race starts, hidden again after it
+    "slide": "auto",           # slide in from: "auto" (the side the window is on), "left", "right", "off"
 }
-KEEP_ON_RESET = ("source", "saved_races_dir", "watch_subfolders", "update_url", "open_menu", "show_overlay")
+KEEP_ON_RESET = ("source", "saved_races_dir", "watch_subfolders", "start_delay", "auto_hide",
+                 "update_url", "open_menu", "show_overlay")
 
 
 STATE_COLORS = {"green": "#2ecc71", "yellow": "#f1c40f", "red": "#e74c3c"}
@@ -708,6 +721,81 @@ class PlayersDB:
 
     def rows(self):
         return sorted(self.data.items(), key=lambda kv: kv[1].get("last_seen", ""), reverse=True)
+
+
+# Names of alternative outfits, by race dress id. The default outfit of a uma has the dress id
+# chara id * 100 + 1 (for example 100201 = Silence Suzuka) and is shown with just her name.
+# Everything else is an alternative outfit: shown as "Name (Outfit)". You can name more of them
+# in the Outfits tab (they are saved in images/outfits.json).
+BUILTIN_OUTFITS = {
+    105840: "Halloween",      # Meisho Doto
+}
+
+
+def is_alt_outfit(chara_id, dress_id):
+    return bool(chara_id and dress_id and int(dress_id) != int(chara_id) * 100 + 1)
+
+
+class OutfitsDB:
+    """images/outfits.json - every alternative outfit seen in a race, and the name you gave it."""
+
+    def __init__(self, path):
+        self.path = path
+        self.data = {}          # "105840" -> {"uma": "Meisho Doto", "label": "Halloween"}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            if isinstance(d, dict):
+                self.data = {str(k): v for k, v in d.items() if isinstance(v, dict)}
+        except Exception:
+            self.data = {}
+
+    def save(self):
+        try:
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
+            tmp = self.path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self.data, f, indent=2, ensure_ascii=False)
+            os.replace(tmp, self.path)
+        except Exception as e:
+            print("could not save outfits.json:", e)
+
+    def label_for(self, chara_id, dress_id):
+        """"" for the default outfit, otherwise the outfit name ("Alt" while it has no name yet)."""
+        if not is_alt_outfit(chara_id, dress_id):
+            return ""
+        mine = (self.data.get(str(int(dress_id))) or {}).get("label", "").strip()
+        return mine or BUILTIN_OUTFITS.get(int(dress_id), "") or "Alt"
+
+    def display(self, name, chara_id, dress_id):
+        lab = self.label_for(chara_id, dress_id)
+        return "%s (%s)" % (name, lab) if lab else name
+
+    def touch(self, chara_id, dress_id, uma):
+        """Remember an alternative outfit so it shows up in the Outfits tab. True if it is new."""
+        if not is_alt_outfit(chara_id, dress_id):
+            return False
+        key = str(int(dress_id))
+        if key in self.data:
+            self.data[key]["uma"] = uma
+            return False
+        self.data[key] = {"uma": uma, "label": ""}
+        return True
+
+    def set_label(self, dress_id, label):
+        e = self.data.setdefault(str(int(dress_id)), {"uma": "", "label": ""})
+        e["label"] = label.strip()
+        self.save()
+
+    def rows(self):
+        out = []
+        for k, v in self.data.items():
+            try:
+                did = int(k)
+            except ValueError:
+                continue
+            out.append((did, v.get("uma", ""), v.get("label", "")))
+        return sorted(out, key=lambda r: (r[1].lower(), r[0]))
 
 
 def find_wine_thumb_dirs():
@@ -881,6 +969,8 @@ class Horse:
         self.style = r.get("style") or 0
         self.gate = r.get("gate") or 0
         self.chara_id = r.get("charaId") or (r.get("dressId", 0) // 100 if r.get("dressId") else 0)
+        self.dress_id = int(r.get("dressId") or 0)
+        self.label = self.name          # what is shown: "Name" or "Name (Outfit)"
         self.card_id = 0
         self.pkey = None
         self.ukey = None
@@ -913,6 +1003,9 @@ class OverlayWidget(QWidget):
         self.source_kind = "live"      # set by main(): "live", "watch" or "demo"
         self.tray = None
         self.tray_active = False
+        self.slide = 0.0               # 0 = tower is out of the window, 1 = fully slid in
+        self.pinned = False            # "Show overlay window": keep it visible to place it
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)   # never steal focus from the game
         self.quitting = False
         self.state = "yellow"
         self.preview = False
@@ -961,6 +1054,7 @@ class OverlayWidget(QWidget):
         self.thumbs = ImageStore(self.base, images_dir, extra)
         self.images_dir = images_dir
         self.players = PlayersDB(os.path.join(images_dir, "players.json"))
+        self.outfits = OutfitsDB(os.path.join(images_dir, "outfits.json"))
         self.thumbs.loaded.connect(self.on_thumb)
         self.thumbs.start()
 
@@ -982,6 +1076,7 @@ class OverlayWidget(QWidget):
         source.status.connect(self.on_status)
         source.quit_request.connect(self.quit_app)
         source.offset = float(self.cfg.get("sync_offset", 0.0))
+        source.delay = float(self.s.get("start_delay", 12.0))
         source.start()
 
     def on_status(self, text):
@@ -1038,6 +1133,7 @@ class OverlayWidget(QWidget):
             chara = rm.get("chara_id") or h.chara_id
             h.chara_id = chara
             h.card_id = rm.get("card_id") or (chara * 100 + 1 if chara else 0)
+            h.label = self.outfits.display(h.name, h.chara_id, h.dress_id)
             base = h.chara_id * 100 + 1 if h.chara_id else 0
             if h.trainer:
                 h.pkey = "p:" + h.trainer.strip().lower()
@@ -1055,8 +1151,14 @@ class OverlayWidget(QWidget):
                 if h.trainer:
                     self.players.touch(h.trainer, h.name)
             self.players.save()
+            new_outfit = False
+            for h in self.horses:         # ... and every alternative outfit, so you can name it
+                new_outfit |= self.outfits.touch(h.chara_id, h.dress_id, h.name)
+            if new_outfit:
+                self.outfits.save()
             if self.dialog is not None:
                 self.dialog.refresh_players()
+                self.dialog.refresh_outfits()
 
         self.course_shape = payload.get("courseShape")
         self.course_data = payload.get("courseData")
@@ -1112,6 +1214,18 @@ class OverlayWidget(QWidget):
         self.panel_alpha += (want - self.panel_alpha) * min(1.0, dt * 8)
         if abs(want - self.panel_alpha) < 0.01:
             self.panel_alpha = want
+
+        # slide in while a race runs, slide out afterwards; the window itself only shows during a race
+        if want and self.auto_hide_active() and not self.isVisible():
+            self.reveal()
+        step = dt / SLIDE_SECONDS
+        if self.slide < want:
+            self.slide = min(want, self.slide + step)
+        elif self.slide > want:
+            self.slide = max(want, self.slide - step)
+        if (not want and self.slide <= 0.0 and self.isVisible() and self.auto_hide_active()
+                and not self.pinned):
+            self.hide()
 
         k = min(1.0, dt * 14)
         for h in self.horses:
@@ -1239,6 +1353,48 @@ class OverlayWidget(QWidget):
         f.setBold(bold)
         return f
 
+    # ----- when the window shows, and the slide ------------------------------------
+    def auto_hide_active(self):
+        """True when the window should only be visible while a race runs.
+        Not possible without a tray icon (you could not get it back), and --show keeps it always visible."""
+        return bool(self.s.get("auto_hide", True) and self.tray_active and not self.args.show
+                    and not self.args.no_tray)
+
+    def window_wanted(self):
+        """What the 'Show / Hide overlay window' button means right now."""
+        if self.auto_hide_active():
+            return self.pinned
+        return self.isVisible()
+
+    def reveal(self):
+        """Show the window for a race without taking the keyboard focus away from the game."""
+        self.slide = 0.0
+        self.show()
+        self.raise_()
+
+    def sync_window_visibility(self):
+        """Called when 'hide the window when no race runs' is switched on or off."""
+        if self.auto_hide_active():
+            if self.isVisible() and not self.pinned and not self.racing:
+                self.hide()
+        elif not self.isVisible() and not self.quitting:
+            self.show()
+        self.refresh_tray()
+
+    def slide_dir(self):
+        """-1 = the tower comes in from the left, +1 = from the right, 0 = no sliding (fade only)."""
+        mode = self.s.get("slide", "auto")
+        if mode == "left":
+            return -1
+        if mode == "right":
+            return 1
+        if mode == "off":
+            return 0
+        scr = self.screen()
+        if scr is None:
+            return 1
+        return 1 if self.geometry().center().x() > scr.geometry().center().x() else -1
+
     def paintEvent(self, _ev):
         p = QPainter(self)
         p.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing
@@ -1261,12 +1417,19 @@ class OverlayWidget(QWidget):
             if not a.chroma and not a.transparent:
                 p.setPen(QColor(s["sub_color"]))
                 p.setFont(self.fnt(11))
+                text = self.status_text
+                if self.pinned and self.auto_hide_active():
+                    text = ("Placing the overlay: drag to move, pull an edge to resize.\n"
+                            "It is hidden when no race runs and slides in when a race starts.\n\n" + text)
                 p.drawText(QRectF(8, 8, lw - 16, lh - 16),
-                           Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap,
-                           self.status_text)
+                           Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap, text)
             p.end()
             return
 
+        d = self.slide_dir()
+        if d:
+            e = 1.0 - (1.0 - max(0.0, min(1.0, self.slide))) ** 3      # ease out
+            p.translate(d * (1.0 - e) * lw, 0)
         p.setOpacity(self.panel_alpha)
         if a.chroma or a.transparent:
             need_h = HEADER_H + len(self.horses) * ROW_H + FOOT_PAD
@@ -1361,10 +1524,17 @@ class OverlayWidget(QWidget):
         p.setFont(tf); p.setPen(tc)
         p.drawText(QRectF(nx + 18, y + 8, name_w, 16), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                    QFontMetrics(tf).elidedText(h.trainer, Qt.TextElideMode.ElideRight, name_w))
+        # uma name: "Meisho Doto", or "Meisho Doto (Halloween)" for an alternative outfit.
+        # A long name is made a little smaller first, and only cut off when it still does not fit.
+        full_w = name_w + 18
         nf = self.fnt(10)
+        for px in (9.0, 8.0):
+            if QFontMetrics(nf).horizontalAdvance(h.label) <= full_w:
+                break
+            nf = self.fnt(px)
         p.setFont(nf); p.setPen(sc)
-        p.drawText(QRectF(nx, y + 25, name_w + 18, 14), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                   QFontMetrics(nf).elidedText(h.name, Qt.TextElideMode.ElideRight, name_w + 18))
+        p.drawText(QRectF(nx, y + 25, full_w, 14), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                   QFontMetrics(nf).elidedText(h.label, Qt.TextElideMode.ElideRight, full_w))
 
         # gap
         l1, l2 = h.gap_lines
@@ -1382,13 +1552,17 @@ class OverlayWidget(QWidget):
 
     # ----- tray icon, show/hide, quit ------------------------------------------
     def set_overlay_visible(self, on):
-        self.s["show_overlay"] = bool(on)
-        self.save_settings()
+        on = bool(on)
+        if self.auto_hide_active():
+            self.pinned = on         # placing the window: not remembered, next start it is hidden again
+        else:
+            self.s["show_overlay"] = on
+            self.save_settings()
         if on:
             self.show()
             self.raise_()
-        else:
-            self.hide()
+        elif not (self.auto_hide_active() and self.racing):
+            self.hide()              # during a race it goes away by itself when the race is over
         self.refresh_tray()
 
     def setup_tray(self, force=False):
@@ -1403,7 +1577,7 @@ class OverlayWidget(QWidget):
         self.act_status = m.addAction("Starting...")
         self.act_status.setEnabled(False)
         m.addSeparator()
-        self.act_show = m.addAction("Show overlay window", lambda: self.set_overlay_visible(not self.isVisible()))
+        self.act_show = m.addAction("Show overlay window", lambda: self.set_overlay_visible(not self.window_wanted()))
         m.addAction("Menu / Settings...", self.open_settings)
         self.act_prev = m.addAction("Show preview race")
         self.act_prev.setCheckable(True)
@@ -1435,7 +1609,7 @@ class OverlayWidget(QWidget):
             self.open_settings()
 
     def sync_tray_menu(self):
-        self.act_show.setText("Hide overlay window" if self.isVisible() else "Show overlay window")
+        self.act_show.setText("Hide overlay window" if self.window_wanted() else "Show overlay window")
         self.act_prev.setChecked(self.preview)
         self.act_uma.setChecked(self.s.get("avatar_mode") == "uma")
         self.act_top.setChecked(bool(self.s.get("on_top", True)))
@@ -1501,6 +1675,10 @@ class OverlayWidget(QWidget):
         self.save_settings()
         if key in ("on_top", "title_bar"):
             self.apply_flags()
+        if key == "start_delay" and getattr(self, "source", None) is not None:
+            self.source.delay = float(value)
+        if key == "auto_hide":
+            self.sync_window_visibility()
         self.update()
 
     def apply_flags(self):
@@ -1917,7 +2095,7 @@ QPushButton#primary { background: %(grad)s; color: #2a1020; border: none; }
 QPushButton#primary:hover { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #ff86bd, stop:1 #ffb085); }
 QPushButton#danger { background: #3a1f33; border-color: #7a3a63; color: #ffc2dc; }
 QPushButton#danger:hover { background: #5a2850; border-color: %(pink)s; }
-QLineEdit, QComboBox, QFontComboBox { background: %(input)s; border: 1px solid #4a4068; border-radius: 10px;
+QLineEdit, QComboBox, QFontComboBox, QDoubleSpinBox { background: %(input)s; border: 1px solid #4a4068; border-radius: 10px;
                                       padding: 6px 10px; selection-background-color: %(pink)s;
                                       selection-color: #2a1020; }
 QLineEdit:focus, QComboBox:focus { border-color: %(pink)s; }
@@ -2024,6 +2202,11 @@ class Banner(QWidget):
         p.fillPath(path, QBrush(color))
 
 
+SLIDE_CHOICES = (("auto", "Auto: the side the window is on"),
+                 ("left", "Always from the left"),
+                 ("right", "Always from the right"),
+                 ("off", "No sliding (fade in)"))
+
 SOURCE_CHOICES = (("", "Follow the start script (MODE in settings.sh)"),
                   ("live", "Live: exact race clock from Race Overlay"),
                   ("watch", "Saved races: read the race files from a folder"))
@@ -2059,16 +2242,15 @@ class SettingsDialog(QDialog):
         row_b = QHBoxLayout()
         self.btn_show = QPushButton("Show overlay window")
         self.btn_show.setObjectName("primary")
-        self.btn_show.clicked.connect(lambda: ov.set_overlay_visible(not ov.isVisible()))
+        self.btn_show.clicked.connect(lambda: ov.set_overlay_visible(not ov.window_wanted()))
         self.btn_prev2 = QPushButton("Show preview race")
         self.btn_prev2.clicked.connect(lambda: ov.set_preview(not ov.preview))
         row_b.addWidget(self.btn_show)
         row_b.addWidget(self.btn_prev2)
         mv.addLayout(row_b)
-        note = QLabel("OBS can only capture the overlay while its window is shown. "
-                      "Press the button once and the choice is remembered for the next start.")
-        note.setWordWrap(True)
-        mv.addWidget(note)
+        self.note_show = QLabel()
+        self.note_show.setWordWrap(True)
+        mv.addWidget(self.note_show)
         self.cb_menu = QCheckBox("Open this menu when the program starts")
         self.cb_menu.setChecked(bool(ov.s.get("open_menu", True)))
         self.cb_menu.toggled.connect(lambda on: ov.set_setting("open_menu", on))
@@ -2121,11 +2303,7 @@ class SettingsDialog(QDialog):
         bq.setObjectName("danger")
         bq.clicked.connect(ov.quit_app)
         mv.addWidget(bq)
-        sa = QScrollArea()                 # scrolls on small screens instead of squeezing the texts
-        sa.setWidgetResizable(True)
-        sa.setFrameShape(QFrame.Shape.NoFrame)
-        sa.setWidget(mt)
-        tabs.addTab(sa, "Menu")
+        tabs.addTab(self.scrolled(mt), "Menu")
 
         # ---- Races tab (where the races come from + the saved races folder)
         rt = QWidget()
@@ -2173,17 +2351,41 @@ class SettingsDialog(QDialog):
         fl.addWidget(bo2)
         rv.addWidget(fbox)
 
+        dbox = QGroupBox("When does the race start? (saved races)")
+        dl = QVBoxLayout(dbox)
+        dtext = QLabel("The game saves the race file when the race <b>loads</b>, long before the gates open. "
+                       "The overlay waits this many seconds after it sees a new file and then slides in. "
+                       "Too early? Make it bigger. Too late? Make it smaller.")
+        dtext.setWordWrap(True)
+        dl.addWidget(dtext)
+        drow = QHBoxLayout()
+        self.sp_delay = QDoubleSpinBox()
+        self.sp_delay.setRange(0.0, 120.0)
+        self.sp_delay.setSingleStep(0.5)
+        self.sp_delay.setDecimals(1)
+        self.sp_delay.setSuffix(" seconds")
+        self.sp_delay.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)   # type it, or use the wheel / arrow keys
+        self.sp_delay.setMinimumWidth(150)
+        self.sp_delay.setValue(float(ov.s.get("start_delay", 12.0)))
+        self.sp_delay.valueChanged.connect(lambda v: ov.set_setting("start_delay", float(v)))
+        drow.addWidget(self.sp_delay)
+        drow.addStretch(1)
+        dl.addLayout(drow)
+        dnote = QLabel("Fine tuning: with the overlay window selected, the arrow keys move the start by "
+                       "0.25 s (left / right) or 1 s (down / up). Live mode needs none of this: it follows "
+                       "the real race clock.")
+        dnote.setWordWrap(True)
+        dl.addWidget(dnote)
+        rv.addWidget(dbox)
+
         wbox = QGroupBox("Good to know")
         wl = QVBoxLayout(wbox)
-        know = QLabel("A saved race file is written when the race <b>loads</b>, not when it starts, "
-                      "so with saved races the timing can be a little off. Use the arrow keys in the overlay "
-                      "window to adjust it. Live mode is always exact.<br><br>"
-                      "Files that are not races (for example a list of veterans) are skipped automatically.")
+        know = QLabel("Files that are not races (for example a list of veterans) are skipped automatically.")
         know.setWordWrap(True)
         wl.addWidget(know)
         rv.addWidget(wbox)
         rv.addStretch(1)
-        tabs.addTab(rt, "Races")
+        tabs.addTab(self.scrolled(rt), "Races")
         self.update_source_label()
         self.refresh_count()
 
@@ -2197,13 +2399,28 @@ class SettingsDialog(QDialog):
         self.cb_top.toggled.connect(lambda on: ov.set_setting("on_top", on))
         f.addRow("Always on top", self.cb_top)
 
-        self.cb_title = QCheckBox("Show the window title bar (off = clean window; drag to move, pull the edges to resize)")
+        self.cb_hide = QCheckBox("Hide the window until a race starts")
+        self.cb_hide.setChecked(bool(s.get("auto_hide", True)))
+        self.cb_hide.toggled.connect(lambda on: ov.set_setting("auto_hide", on))
+        self.cb_hide.setToolTip("The window is hidden when no race runs and shows (without taking focus from the game)\nwhen a race starts. Use 'Show overlay window' in the Menu tab to place it.")
+        f.addRow("Before the race", self.cb_hide)
+
+        self.cmb_slide = QComboBox()
+        for _v, text in SLIDE_CHOICES:
+            self.cmb_slide.addItem(text)
+        self.cmb_slide.setCurrentIndex(next((i for i, (v, _t) in enumerate(SLIDE_CHOICES)
+                                             if v == s.get("slide", "auto")), 0))
+        self.cmb_slide.activated.connect(lambda i: ov.set_setting("slide", SLIDE_CHOICES[i][0]))
+        f.addRow("Slides in from", self.cmb_slide)
+
+        self.cb_title = QCheckBox("Show the window title bar")
         self.cb_title.setChecked(bool(s.get("title_bar", False)))
         self.cb_title.toggled.connect(lambda on: ov.set_setting("title_bar", on))
+        self.cb_title.setToolTip("Off = clean window: drag to move it, pull the edges to resize it.")
         f.addRow("Title bar", self.cb_title)
 
         self.cmb_avatar = QComboBox()
-        self.cmb_avatar.addItems(["Trainer / Discord picture (uma face if there is none)", "Uma face"])
+        self.cmb_avatar.addItems(["Trainer picture (uma face if none)", "Uma face"])
         self.cmb_avatar.setCurrentIndex(1 if s.get("avatar_mode") == "uma" else 0)
         self.cmb_avatar.currentIndexChanged.connect(
             lambda i: ov.set_setting("avatar_mode", "uma" if i == 1 else "trainer"))
@@ -2217,7 +2434,7 @@ class SettingsDialog(QDialog):
         self.sl_op.setRange(0, 100)
         self.sl_op.setValue(int(float(s.get("bg_opacity", 1.0)) * 100))
         self.sl_op.valueChanged.connect(lambda v: ov.set_setting("bg_opacity", v / 100.0))
-        f.addRow("Background opacity\n(only with --transparent / --chroma)", self.sl_op)
+        f.addRow("Background opacity\n(--transparent / --chroma)", self.sl_op)
 
         self.btn_tc = QPushButton()
         self.btn_tc.clicked.connect(lambda: self.pick("text_color", self.btn_tc))
@@ -2257,7 +2474,7 @@ class SettingsDialog(QDialog):
         btn_reset = QPushButton("Reset look to defaults")
         btn_reset.clicked.connect(self.reset)
         f.addRow("", btn_reset)
-        tabs.addTab(look, "Look")
+        tabs.addTab(self.scrolled(look), "Look")
 
         # ---- Players tab
         pl = QWidget()
@@ -2290,11 +2507,47 @@ class SettingsDialog(QDialog):
         v.addLayout(br)
         tabs.addTab(pl, "Players")
 
+        # ---- Outfits tab (names for alternative outfits)
+        ot = QWidget()
+        ov_l = QVBoxLayout(ot)
+        oinfo = QLabel("A uma in her normal outfit is shown with just her name. When a uma wears another outfit, "
+                       "it appears here by itself. Type a name in the <b>Name</b> column (for example "
+                       "<i>Halloween</i>) and the overlay shows <i>Meisho Doto (Halloween)</i>. "
+                       "Until you name it, it shows <i>(Alt)</i>.")
+        oinfo.setWordWrap(True)
+        ov_l.addWidget(oinfo)
+        self.otable = QTableWidget(0, 3)
+        self.otable.setHorizontalHeaderLabels(["Uma", "Outfit id", "Name (double-click to edit)"])
+        self.otable.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.otable.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked
+                                    | QAbstractItemView.EditTrigger.EditKeyPressed)
+        self.otable.horizontalHeader().setStretchLastSection(True)
+        self.otable.verticalHeader().setVisible(False)
+        self.otable.setAlternatingRowColors(True)
+        self.otable.setShowGrid(False)
+        self.otable.setColumnWidth(0, 200)
+        self.otable.setColumnWidth(1, 90)
+        self._outfit_busy = False
+        self.otable.itemChanged.connect(self.on_outfit_edited)
+        ov_l.addWidget(self.otable, 1)
+        tabs.addTab(ot, "Outfits")
+        self.refresh_outfits()
+
         self.sync_widgets()
         self.poll()
         self.timer = QTimer(self)      # keeps the preview tick-box and trainer list up to date
         self.timer.timeout.connect(self.poll)
         self.timer.start(1500)
+
+    @staticmethod
+    def scrolled(widget):
+        """A tab that scrolls on small screens instead of squeezing its contents."""
+        sa = QScrollArea()
+        sa.setWidgetResizable(True)
+        sa.setFrameShape(QFrame.Shape.NoFrame)
+        sa.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        sa.setWidget(widget)
+        return sa
 
     # ---- races tab
     def races_folder(self):
@@ -2519,6 +2772,8 @@ class SettingsDialog(QDialog):
         self.ov.reset_settings()
         s = self.ov.s
         self.cb_top.setChecked(s["on_top"])
+        self.cb_hide.setChecked(bool(s.get("auto_hide", True)))
+        self.cmb_slide.setCurrentIndex(0)
         self.cb_title.setChecked(s["title_bar"])
         self.cmb_avatar.setCurrentIndex(0)
         self.sl_op.setValue(int(s["bg_opacity"] * 100))
@@ -2532,7 +2787,15 @@ class SettingsDialog(QDialog):
         if ov.racing:
             dot = "#3498db"
         self.lbl_state.setText('<span style="color:%s">&#9679;</span> %s' % (dot, ov.status_summary().replace("\n", " ")))
-        self.btn_show.setText("Hide overlay window" if ov.isVisible() else "Show overlay window")
+        if ov.auto_hide_active():
+            self.btn_show.setText("Done placing: hide the window" if ov.pinned else "Show overlay window (to place it)")
+            self.note_show.setText("The overlay window is hidden until a race starts, then the tower slides in "
+                                   "and slides out again after the race. Press the button to show the window "
+                                   "while you move it to where you want it.")
+        else:
+            self.btn_show.setText("Hide overlay window" if ov.isVisible() else "Show overlay window")
+            self.note_show.setText("OBS can only capture the overlay while its window is shown. "
+                                   "Press the button once and the choice is remembered for the next start.")
         self.btn_prev2.setText("Stop preview" if ov.preview else "Show preview race")
         self.cb_prev.blockSignals(True)
         self.cb_prev.setChecked(self.ov.preview)
@@ -2548,6 +2811,35 @@ class SettingsDialog(QDialog):
             QMessageBox.information(self, "Pick a trainer", "Click a trainer in the list first.")
             return None
         return it.text()
+
+    def refresh_outfits(self):
+        self._outfit_busy = True
+        rows = self.ov.outfits.rows()
+        self.otable.setRowCount(len(rows))
+        for i, (did, uma, label) in enumerate(rows):
+            shown = label or BUILTIN_OUTFITS.get(did, "")
+            cells = (uma, str(did), shown)
+            for c, text in enumerate(cells):
+                it = QTableWidgetItem(text)
+                if c < 2:
+                    it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.otable.setItem(i, c, it)
+        self._outfit_busy = False
+
+    def on_outfit_edited(self, item):
+        if self._outfit_busy or item.column() != 2:
+            return
+        id_item = self.otable.item(item.row(), 1)
+        if id_item is None:
+            return
+        try:
+            did = int(id_item.text())
+        except ValueError:
+            return
+        self.ov.outfits.set_label(did, item.text())
+        for h in self.ov.horses:                       # a race on screen follows the new name at once
+            h.label = self.ov.outfits.display(h.name, h.chara_id, h.dress_id)
+        self.ov.update()
 
     def refresh_players(self):
         keep = None
@@ -2672,13 +2964,18 @@ def main():
         w.save_settings()
     app.setQuitOnLastWindowClosed(False)
     tray_ok = False if args.no_tray else w.setup_tray()
-    if args.show or not tray_ok or w.s.get("show_overlay"):
+    hidden_until_race = w.auto_hide_active()
+    if args.show or not tray_ok:
         w.show()
         w.s["show_overlay"] = True
+    elif w.s.get("show_overlay") and not hidden_until_race:
+        w.show()
     if tray_ok and (first_run or w.s.get("open_menu", True)):
         QTimer.singleShot(500, w.open_settings)
     if tray_ok and not w.isVisible():
         w.tray.showMessage(APP_NAME + " is running",
+                           ("The overlay is hidden until a race starts, then it slides in. "
+                            "Use 'Show overlay window' in the menu to place it.") if hidden_until_race else
                            "Click the icon for the menu. Press 'Show overlay window' to show the overlay.",
                            QSystemTrayIcon.MessageIcon.Information, 6000)
     code = app.exec()

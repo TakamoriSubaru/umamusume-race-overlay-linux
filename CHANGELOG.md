@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0
+
+- **New:** no overlay before the race. The window is hidden until the race starts, then the tower slides in from the side the window is on (or left / right, your choice) and slides out after the race. The window never takes the keyboard focus from the game.
+- **New:** alternative outfits are shown as *Name (Outfit)*, the normal outfit as just *Name*. New **Outfits** tab to name them (saved in `images/outfits.json`). *Meisho Doto (Halloween)* is built in.
+- **New:** **Start delay** setting for saved races. The game saves the race file when the race loads, so the overlay now waits before it shows the race instead of starting at once.
+- **Better:** the Menu, Races and Look tabs scroll on small screens; shorter labels in the Look tab.
+- **Note:** the overlay window is now hidden at start when a tray icon is available. Use **Show overlay window (to place it)** to move it, or untick **Hide the window until a race starts**.
+
 ## 1.1.0
 
 - **New:** Races tab in the Menu window with a **Saved races folder** setting (Browse button). The folders inside it are searched too, and you can switch the folder while the program runs.

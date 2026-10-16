@@ -27,6 +27,8 @@
 - [Player pictures and uma faces](#-player-pictures-and-uma-faces)
 - [Modes](#-modes)
 - [Saved races folder](#-saved-races-folder)
+- [Hidden until the race, slide-in](#-hidden-until-the-race-slide-in)
+- [Alternative outfits](#-alternative-outfits)
 - [Keys and mouse](#-keys-and-mouse)
 - [Command line options](#-command-line-options)
 - [Updating](#-updating)
@@ -43,6 +45,8 @@
 - 🪟 **Native window:** works with OBS Window Capture, optional green background for Chroma Key
 - 🟢 **Tray icon** with a status dot: green = working, yellow = waiting, red = problem, blue = race running
 - 🗂️ **Menu window:** show/hide the overlay, preview race, settings, folder shortcuts
+- 🙈 **Hidden until the race:** no overlay before the race; the tower slides in from the side of the screen it is on when the race starts, and slides out afterwards (new in 1.2.0)
+- 👗 **Alternative outfits:** shown as *Meisho Doto (Halloween)*, the normal outfit as just *Meisho Doto* (new in 1.2.0)
 - 🌙 **Dark settings window** with a pink, yellow and mint theme (new in 1.1.0)
 - 📂 **Saved races folder:** pick the folder in Settings; the folders inside it (Career, Room match, ...) are searched too (new in 1.1.0)
 - 🎨 **Customize:** background colour, text colour, text size, font, always on top, title bar on/off
@@ -156,7 +160,32 @@ Good to know:
 - The choice made in Settings wins over `settings.sh` and over `--watch FOLDER`. It is saved in `~/.config/race-overlay-native/config.json`.
 - Files that are not races (for example a list of veterans) are skipped automatically.
 - "Reset look to defaults" does **not** reset your folder or source.
-- A race file is written when the race **loads**, not when it starts, so timing can be a little off in saved-races mode. Use the arrow keys in the overlay window to adjust it.
+- A race file is written when the race **loads**, not when it starts. The overlay therefore waits **Start delay** seconds (Races tab, default 12) after it sees a new file before it slides in. If it appears too early, make the delay bigger; too late, smaller. The arrow keys in the overlay window fine-tune it (0.25 s left / right, 1 s down / up). A saved file cannot tell how long you stay on the line-up screen, so this is always an estimate. **Live** mode is exact.
+
+---
+
+## 🙈 Hidden until the race, slide-in
+
+<div align="center">
+<img src="docs/slide-in.png" alt="The tower sliding in from the right" width="760">
+</div>
+
+- **Before the race there is no overlay.** The window stays hidden. When the race starts it appears (without taking the keyboard focus away from the game) and the tower slides in. After the race it slides out and the window hides again.
+- **Which side?** *Look* tab → **Slides in from**: *Auto* uses the side of the screen the window is on (window on the right half: from the right), or force *left*, *right*, or *no sliding*.
+- **Placing the window:** open the Menu and press **Show overlay window (to place it)**. Drag it where you want it, then press the button again. The position is remembered.
+- **Old behaviour:** untick **Hide the window until a race starts** in the *Look* tab. Without a tray icon the window is always shown, because you could not get it back.
+- **In OBS:** the *Window Capture* source is empty while the window is hidden and picks the window up again when it appears. For a clean slide (the tower sliding over your video and not over a dark box), start with `--chroma` and add a **Chroma Key** filter.
+- **Live vs saved races:** in *live* mode the window appears exactly when the real race clock starts. With *saved races* the start is calculated, see [Saved races folder](#-saved-races-folder).
+
+---
+
+## 👗 Alternative outfits
+
+<div align="center">
+<img src="docs/settings-outfits.png" alt="Settings, Outfits tab" width="520">
+</div>
+
+A uma in her normal outfit is shown with just her name. In another outfit the tower shows *Meisho Doto (Halloween)*. The game tells the outfits apart by an id, so the first time one appears it is added to the **Outfits** tab. Type a name there (double-click the *Name* column) and the tower uses it right away. Until it has a name it shows *(Alt)*. The names are saved in `images/outfits.json`.
 
 ---
 
@@ -222,7 +251,7 @@ install_launcher.sh       creates the menu / Desktop icon
 latest.json.example       example for the online updater
 CHANGELOG.md              what changed in each version
 docs/                     screenshots used by this README
-images/                   your pictures (created automatically, not in the repo)
+images/                   your pictures, players.json and outfits.json (created automatically, not in the repo)
 backup/                   old versions kept by the updater (not in the repo)
 ```
 
@@ -242,7 +271,10 @@ Settings are stored in `~/.config/race-overlay-native/config.json`.
 | OBS cannot find the window | Press **Show overlay window** in the Menu. A hidden window cannot be captured. |
 | No tray icon | Your desktop may not show tray icons. The overlay then stays visible so you can still use it (right-click for the menu). |
 | Faces are letters, not pictures | The `character_thumbs` folder was not found. Copy it into `images/uma/`. |
-| Timing is off in watch mode | Use the arrow keys in the overlay window, or switch to live mode. |
+| The tower appears before the gates open (saved races) | Raise **Start delay** in the Races tab. It is an estimate: live mode is exact. |
+| The tower appears too late (saved races) | Lower **Start delay**, or nudge with the arrow keys. |
+| I cannot see the overlay window | That is normal before a race: it is hidden until the race starts. Use **Show overlay window (to place it)** in the Menu, or untick **Hide the window until a race starts** in the Look tab. |
+| A uma shows *(Alt)* | It is an alternative outfit without a name. Name it in the **Outfits** tab. |
 
 ---
 
