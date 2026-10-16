@@ -51,7 +51,7 @@
 - 📂 **Saved races folder:** pick the folder in Settings; the folders inside it (Career, Room match, ...) are searched too (new in 1.1.0)
 - 🎨 **Customize:** background colour, text colour, text size, font, always on top, title bar on/off
 - 🖼️ **Player pictures:** every trainer you race against is collected automatically, you just add the pictures
-- 🔁 **One-click switch** between trainer pictures and uma faces (or press **T**)
+- 🖼️ **Uma image and player picture are separate:** the uma always keeps its own image and the player gets a small picture on its corner (or choose uma only / player only, press **T** to switch)
 - 🎮 **Starts and stops with the game** (optional Steam launch option)
 - ⬆️ **Built-in updater:** update from a file, or check online
 
@@ -125,7 +125,8 @@ The tower shows up when a race starts and stays a few seconds after it finishes 
 </div>
 
 - **Players tab:** every trainer that appears in a race is added automatically. Select one and press **Choose picture...** (a file) or **Paste link...** (a web address).
-- **Pictures mode:** *Trainer / Discord picture* uses the player's picture and falls back to the uma face. *Uma face* always shows the uma. Switch it in the **Look** tab, the tray menu or with **T**.
+- **Uma image and player picture are two different pictures.** The uma image belongs to the uma (and its outfit) and is always the same. The player picture belongs to the trainer and follows them, whatever uma they run.
+- **Pictures mode** (Look tab, tray menu, right-click menu, or press **T** to cycle): *Uma image + player picture* (default: big uma image with a small player picture on its corner), *Uma image only*, or *Player picture* (in the big circle, the uma image is used when the player has none). A player without a picture simply shows no small picture.
 - **Uma faces** are found automatically in the `character_thumbs` folder of Race Overlay inside your Wine prefix. If they are not found, copy that folder's content into `images/uma/`. To replace one, put a file named after the card id, chara id or uma name there (for example `100101.png` or `Special Week.png`).
 - **Player pictures** can also be placed by hand in `images/players/`, named after the trainer (for example `Takamori.png`).
 
@@ -199,7 +200,7 @@ A uma in her normal outfit is shown with just her name. In another outfit the to
 | Drag an edge | Resize |
 | Right click | Menu |
 | `S` | Settings |
-| `T` | Trainer pictures / uma faces |
+| `T` | Pictures: uma + player, uma only, player |
 | `Esc` | Hide the overlay (it keeps running in the tray) |
 
 ---
@@ -227,7 +228,7 @@ Run `./start_overlay.sh --help` for the full list. The most useful:
 
 Open the **Menu** and use the **Updates** section:
 
-- **Update from file...** choose a downloaded `.zip` or `race_overlay_native.py`.
+- **Update from file...** choose the downloaded `.zip` of the new version.
 - **Check online** paste the link to a `latest.json` (see `latest.json.example`) and press the button. If a newer version exists, an install button appears.
 
 Before replacing anything, the old files are copied to `backup/`. Your pictures, player database and settings are never touched, and `settings.sh` is never overwritten.
@@ -240,7 +241,18 @@ Before replacing anything, the old files are copied to `backup/`. Your pictures,
 ## 📁 Folder layout
 
 ```
-race_overlay_native.py    the program
+race_overlay_native.py    start file (kept small, all start scripts use it)
+race_overlay/             the program, one file per part:
+  constants.py              names, version, layout, default settings
+  config.py, util.py        saving settings, small helpers
+  simdata.py                decodes the race replay data
+  sources.py                live server, saved races (watch) and demo
+  databases.py, images.py   players / outfits lists and picture loading
+  overlay_widget.py         the overlay window and the race tower
+  settings_dialog.py        the Menu / Settings window
+  theme.py, tray.py         look of the settings window, tray icon
+  updater.py                updating with a backup
+  main.py                   command line options and start
 icon.png                  icon
 settings.sh               your paths and mode
 start_auto.sh             start everything

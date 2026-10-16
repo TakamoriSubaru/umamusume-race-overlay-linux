@@ -1,7 +1,5 @@
-cd /home/darryl/Documents/Umalliance/race-overlay-native
-
-cat > push_update.sh <<'EOF'
 #!/usr/bin/env bash
+# Sends all your changes to GitHub in one command.
 # Usage:  ./push_update.sh "short description of what changed"
 cd "$(dirname "$0")" || exit 1
 MSG="${1:-Update}"
@@ -22,8 +20,3 @@ fi
 echo
 echo "Done. Latest commits:"
 git log --oneline -3
-EOF
-
-chmod +x push_update.sh
-ls
-./push_update.sh "Add push script"
