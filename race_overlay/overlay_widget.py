@@ -160,7 +160,6 @@ class OverlayWidget(FramelessMixin, QWidget):
     def logical_w(self):
         return BASE_W
 
-    # ----- source wiring ------------------------------------------------------
     def attach(self, source):
         self.source = source
         source.race.connect(self.on_race)
@@ -182,7 +181,6 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.refresh_tray()
         self.update()
 
-    # ----- images --------------------------------------------------------------
     def want_img(self, key, spec):
         if key and key not in self.pix and key not in self.pix_pending:
             self.pix_pending.add(key)
@@ -206,7 +204,6 @@ class OverlayWidget(FramelessMixin, QWidget):
         m = self.s.get("pictures", "both")
         return m if m in ("both", "uma", "player") else "both"
 
-    # ----- race events ---------------------------------------------------------
     def on_race(self, payload, rmap):
         self.preview = False
         self.hide_deadline = None
@@ -286,8 +283,10 @@ class OverlayWidget(FramelessMixin, QWidget):
         if p.get("active") and self.frames:
             t = float(p.get("time", 0))
             
-            # Guard against triggering too early during pre-race/loading states
-            if t < 0.0:
+            # Strict guard against pre-race lineup/loading screens (t must be > 0.1)
+            if t <= 0.1:
+                self.clock_active = False
+                self.racing = False
                 return
 
             if not self.racing:
@@ -327,7 +326,8 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.racing = False
             self.hide_deadline = None
 
-        want = 1.0 if (self.racing and self.horses) else 0.0
+        # Require racing, active clock, and horses to show window
+        want = 1.0 if (self.racing and self.clock_active and self.horses) else 0.0
         self.panel_alpha += (want - self.panel_alpha) * min(1.0, dt * 8)
         if abs(want - self.panel_alpha) < 0.01:
             self.panel_alpha = want

@@ -11,7 +11,6 @@ function hookGame() {
 
     console.log("[+] Found GameAssembly.dll at: " + gameAssembly);
 
-    // Ensure IL2CPP environment is initialized before performing operations
     if (typeof Il2Cpp !== "undefined") {
         Il2Cpp.perform(function () {
             try {
@@ -24,8 +23,6 @@ function hookGame() {
                 }
 
                 var image = assembly.image;
-                
-                // Locate Gallop.RaceSimulateManager or equivalent race state class
                 var raceManagerClass = image.class("Gallop.RaceSimulateManager");
                 if (raceManagerClass) {
                     console.log("[+] Found Gallop.RaceSimulateManager!");
@@ -34,7 +31,6 @@ function hookGame() {
                     if (updateMethod) {
                         updateMethod.implementation = function () {
                             try {
-                                // Read simulation fields directly from memory
                                 var isSimulating = this.field("isSimulating").value;
                                 var raceTime = this.field("raceTime").value;
 
@@ -46,7 +42,7 @@ function hookGame() {
                                     }
                                 });
                             } catch (err) {
-                                // Silent fail on field read mismatches during transitions
+                                // Silent fail during scene transitions
                             }
                             return this.Update();
                         };
