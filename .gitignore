@@ -21,3 +21,8 @@ __pycache__/
 backup/
 images/
 *.new
+venv/
+.venv/
+__pycache__/
+*.so
+tools/*.exe
