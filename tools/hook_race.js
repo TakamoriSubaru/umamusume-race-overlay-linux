@@ -1,25 +1,70 @@
-// tools/hook_race.js
-console.log("[*] Loading Umamusume memory hook script...");
+/* tools/hook_race.js - Umamusume Race Simulation Memory Hook via Frida */
+console.log("[*] Loading Umamusume race simulation memory hook...");
 
-// Wait for GameAssembly.dll to be loaded
-Process.enumerateModules({
-    onMatch: function(module) {
-        if (module.name === "GameAssembly.dll") {
-            console.log("[+] Found GameAssembly.dll at: " + module.base);
-            
-            // Here you can hook specific IL2CPP offsets or exported functions.
-            // For example, hooking il2cpp domain functions or custom manager update loops.
-            initializeHooks(module.base);
-        }
-    },
-    onComplete: function() {}
-});
+function hookGame() {
+    var gameAssembly = Module.findBaseAddress("GameAssembly.dll");
+    if (!gameAssembly) {
+        console.log("[*] Waiting for GameAssembly.dll...");
+        setTimeout(hookGame, 1000);
+        return;
+    }
 
-function initializeHooks(baseAddress) {
-    console.log("[*] Initializing IL2CPP hooks...");
-    
-    // Example: You can use Frida's Interceptor to hook functions once you find their offsets 
-    // via Il2CppDumper (dumping global-metadata.dat and GameAssembly.dll).
-    
-    send({ event: "status", message: "Frida hooks active inside GameAssembly.dll" });
+    console.log("[+] Found GameAssembly.dll at: " + gameAssembly);
+
+    // Ensure IL2CPP environment is initialized before performing operations
+    if (typeof Il2Cpp !== "undefined") {
+        Il2Cpp.perform(function () {
+            try {
+                console.log("[+] IL2CPP attached successfully.");
+                var assembly = Il2Cpp.domain.assembly("Assembly-CSharp");
+                if (!assembly) {
+                    console.log("[-] Assembly-CSharp not found yet. Retrying...");
+                    setTimeout(hookGame, 2000);
+                    return;
+                }
+
+                var image = assembly.image;
+                
+                // Locate Gallop.RaceSimulateManager or equivalent race state class
+                var raceManagerClass = image.class("Gallop.RaceSimulateManager");
+                if (raceManagerClass) {
+                    console.log("[+] Found Gallop.RaceSimulateManager!");
+                    
+                    var updateMethod = raceManagerClass.method("Update");
+                    if (updateMethod) {
+                        updateMethod.implementation = function () {
+                            try {
+                                // Read simulation fields directly from memory
+                                var isSimulating = this.field("isSimulating").value;
+                                var raceTime = this.field("raceTime").value;
+
+                                send({
+                                    event: 'clock_tick',
+                                    data: {
+                                        active: Boolean(isSimulating),
+                                        time: Number(raceTime) || 0.0
+                                    }
+                                });
+                            } catch (err) {
+                                // Silent fail on field read mismatches during transitions
+                            }
+                            return this.Update();
+                        };
+                        console.log("[+] Hooked RaceSimulateManager.Update successfully!");
+                    }
+                } else {
+                    console.log("[-] Gallop.RaceSimulateManager class not found in image.");
+                }
+
+                send({ event: "status", message: "Frida memory hooks active and monitoring race state." });
+
+            } catch (e) {
+                console.log("[-] Error during IL2CPP perform: " + e);
+            }
+        });
+    } else {
+        console.log("[-] Frida Il2Cpp module wrapper not detected.");
+    }
 }
+
+setImmediate(hookGame);
