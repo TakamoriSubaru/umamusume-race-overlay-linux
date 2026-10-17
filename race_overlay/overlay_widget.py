@@ -168,7 +168,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         source.status.connect(self.on_status)
         source.quit_request.connect(self.quit_app)
         source.offset = float(self.cfg.get("sync_offset", 0.0))
-        source.delay = float(self.s.get("start_delay", 12.0))
+        # (Removed source.delay line here)
         source.start()
 
     def on_status(self, text):
@@ -875,8 +875,7 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.board.apply_flags()
         if key == "max_rows":
             self.fit_to_rows()
-        if key == "start_delay" and getattr(self, "source", None) is not None:
-            self.source.delay = float(value)
+        # (Removed start_delay handler block here)
         if key == "auto_hide":
             self.sync_window_visibility()
         self.board.update()

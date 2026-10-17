@@ -202,33 +202,6 @@ class SettingsDialog(QDialog):
         fl.addWidget(bo2)
         rv.addWidget(fbox)
 
-        dbox = QGroupBox("When does the race start? (saved races)")
-        dl = QVBoxLayout(dbox)
-        dtext = QLabel("The game saves the race file when the race <b>loads</b>, long before the gates open. "
-                       "The overlay waits this many seconds after it sees a new file and then slides in. "
-                       "Too early? Make it bigger. Too late? Make it smaller.")
-        dtext.setWordWrap(True)
-        dl.addWidget(dtext)
-        drow = QHBoxLayout()
-        self.sp_delay = QDoubleSpinBox()
-        self.sp_delay.setRange(0.0, 120.0)
-        self.sp_delay.setSingleStep(0.5)
-        self.sp_delay.setDecimals(1)
-        self.sp_delay.setSuffix(" seconds")
-        self.sp_delay.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)   # type it, or use the wheel / arrow keys
-        self.sp_delay.setMinimumWidth(150)
-        self.sp_delay.setValue(float(ov.s.get("start_delay", 12.0)))
-        self.sp_delay.valueChanged.connect(lambda v: ov.set_setting("start_delay", float(v)))
-        drow.addWidget(self.sp_delay)
-        drow.addStretch(1)
-        dl.addLayout(drow)
-        dnote = QLabel("Fine tuning: with the overlay window selected, the arrow keys move the start by "
-                       "0.25 s (left / right) or 1 s (down / up). Live mode needs none of this: it follows "
-                       "the real race clock.")
-        dnote.setWordWrap(True)
-        dl.addWidget(dnote)
-        rv.addWidget(dbox)
-
         wbox = QGroupBox("Good to know")
         wl = QVBoxLayout(wbox)
         know = QLabel("Files that are not races (for example a list of veterans) are skipped automatically.")

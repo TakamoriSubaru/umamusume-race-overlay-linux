@@ -1,4 +1,22 @@
+# Virtual environments
+venv/
 .venv/
+env/
+ENV/
+
+# Python cache and build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+build/
+dist/
+*.egg-info/
+
+# Tools / Binaries (download via scripts/instructions instead of committing)
+tools/frida-server*
+tools/*.exe.venv/
 __pycache__/
 backup/
 images/

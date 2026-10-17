@@ -1,4 +1,4 @@
-"""Where races come from: the Race Overlay server (live) and saved race files (watch / demo)."""
+"""Where races come from: the Race Overlay server (live), saved race files (watch / demo), and Frida memory hooks."""
 
 import json
 import os
@@ -10,6 +10,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from .constants import TRACK_NAMES
 from .simdata import parse_sim
 from .util import _safe_listdir, http_get, process_running
+from .memory_hook import MemoryHookThread
 
 
 def result_map_from_latest(d):
@@ -176,12 +177,17 @@ def count_race_files(folder, subfolders=True):
 
 
 def choose_source(args, settings, cfg):
-    """Decides where the races come from. Returns (kind, folder) with kind = "demo", "watch" or "live".
+    """Decides where the races come from. Returns (kind, folder/handle) with kind = "demo", "watch", "live", or "memory".
     The choice made in Settings wins over the start script; an empty choice follows the start script."""
     if args.demo:
         return "demo", ""
+    
+    # Check if memory mode is preferred
     pref = (settings or {}).get("source", "")
-    if pref not in ("live", "watch"):
+    if pref == "memory":
+        return "memory", ""
+
+    if pref not in ("live", "watch", "memory"):
         pref = "watch" if args.watch is not None else "live"
     if pref == "live":
         return "live", ""
