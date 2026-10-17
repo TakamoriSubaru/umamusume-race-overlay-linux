@@ -7,7 +7,10 @@ import os
 APP_NAME = "Umamusume Race Overlay (Linux)"
 
 
-APP_VERSION = "1.3.0"
+RESULTS_NAME = "Umamusume Race Results (Linux)"   # window name of the results board (pick it in OBS)
+
+
+APP_VERSION = "1.4.0"
 
 
 SLIDE_SECONDS = 0.45       # how long the tower takes to slide in / out
@@ -81,11 +84,33 @@ DEFAULT_SETTINGS = {
     # --- when the overlay shows
     "auto_hide": True,         # window is hidden until a race starts, hidden again after it
     "slide": "auto",           # slide in from: "auto" (the side the window is on), "left", "right", "off"
+    # --- tower
+    "rank_arrows": True,       # small up / down arrow when a uma gains or loses a place
+    "max_rows": 0,             # show only the top N umas in the tower (0 = all of them)
+    "accent": "#f5c518",       # accent colour (results board title line and track name)
+    # --- results board (the window that shows after the race)
+    "results_board": True,     # show the results board after each race
+    "results_seconds": 10.0,   # how long it stays (0 = until the next race starts)
 }
 
 
 KEEP_ON_RESET = ("source", "saved_races_dir", "watch_subfolders", "start_delay", "auto_hide",
-                 "update_url", "open_menu", "show_overlay")
+                 "update_url", "open_menu", "show_overlay", "results_board", "results_seconds")
+
+
+# Colour sets for the Look tab. Each one only changes colours.
+THEME_PRESETS = {
+    "Midnight (default)":       {"bg": "#090912", "text_color": "#ffffff", "sub_color": "#9898b8", "accent": "#f5c518"},
+    "Charcoal and gold":        {"bg": "#14161a", "text_color": "#ffffff", "sub_color": "#a9adb5", "accent": "#f5c518"},
+    "Sakura":                   {"bg": "#2a1722", "text_color": "#fff0f6", "sub_color": "#e0a3bd", "accent": "#ff7eb6"},
+    "Mint":                     {"bg": "#0f2421", "text_color": "#effff9", "sub_color": "#8fcfbf", "accent": "#4fe3b5"},
+    "Daylight":                 {"bg": "#f3f4f8", "text_color": "#1a1a28", "sub_color": "#5a5a72", "accent": "#c0392b"},
+    "High contrast":            {"bg": "#000000", "text_color": "#ffffff", "sub_color": "#d0d0d0", "accent": "#ffff00"},
+}
+
+
+ARROW_SECONDS = 2.5        # how long a position-change arrow stays
+ARROW_AFTER = 3.0          # race seconds before arrows start (the gates opening shuffles everyone)
 
 
 STATE_COLORS = {"green": "#2ecc71", "yellow": "#f1c40f", "red": "#e74c3c"}

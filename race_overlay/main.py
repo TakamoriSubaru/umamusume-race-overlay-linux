@@ -13,6 +13,21 @@ from .overlay_widget import OverlayWidget
 from .sources import DemoThread, SseThread, WatchThread, choose_source
 
 
+def prefer_xwayland(args):
+    """On a Wayland desktop, run through XWayland (Qt's "xcb" platform).
+
+    A native Wayland window cannot stay on top, cannot be moved by the program and OBS cannot pick it
+    from its window list. Through XWayland it behaves like on X11. Does nothing when you already chose a
+    Qt platform yourself (QT_QPA_PLATFORM), pass --keep-wayland, or there is no XWayland (DISPLAY)."""
+    if args.keep_wayland or os.environ.get("QT_QPA_PLATFORM"):
+        return None
+    on_wayland = os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland" or bool(os.environ.get("WAYLAND_DISPLAY"))
+    if on_wayland and os.environ.get("DISPLAY"):
+        os.environ["QT_QPA_PLATFORM"] = "xcb"
+        return "Wayland session found: running through XWayland (xcb). Use --keep-wayland to turn this off."
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser(description=APP_NAME + " - native Linux race tower for OBS")
     ap.add_argument("--version", action="version", version=APP_NAME + " " + APP_VERSION)
@@ -46,8 +61,13 @@ def main():
     ap.add_argument("--hide-after", type=float, default=3.0, help="seconds to keep the tower after the race ends")
     ap.add_argument("--no-autosize", action="store_true", help="do not resize the window to fit the horses")
     ap.add_argument("--reset-window", action="store_true", help="ignore the saved window position/size")
+    ap.add_argument("--keep-wayland", action="store_true",
+                    help="on a Wayland desktop, do not switch to XWayland (windows then cannot stay on top)")
     args = ap.parse_args()
 
+    note = prefer_xwayland(args)
+    if note:
+        print(note)
     app = QApplication(sys.argv)
     icon_path = os.path.join(SCRIPT_DIR, "icon.png")
     if os.path.isfile(icon_path):

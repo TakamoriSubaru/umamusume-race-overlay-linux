@@ -10,6 +10,8 @@ from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon, QWidget
 from .config import save_config
 from .constants import (
     APP_NAME,
+    ARROW_AFTER,
+    ARROW_SECONDS,
     BASE_W,
     DEFAULT_SETTINGS,
     FOOT_PAD,
@@ -23,11 +25,14 @@ from .constants import (
     STATE_COLORS,
     STYLE_COLOR,
     STYLE_LABEL,
+    THEME_PRESETS,
     WAKU_COLORS,
     WAKU_DARK,
 )
 from .databases import OutfitsDB, PlayersDB
+from .frameless import FramelessMixin, fit_window
 from .images import ImageStore, find_wine_thumb_dirs
+from .results_board import ResultsBoard
 from .settings_dialog import SettingsDialog
 from .simdata import parse_sim
 from .sources import WatchThread, choose_source
@@ -56,9 +61,12 @@ class Horse:
         self.rank = 0
         self.gap_lines = ("", "")
         self.gap_kind = "none"
+        self.prev_rank = None       # place on the previous frame (for the up / down arrow)
+        self.move_dir = 0           # +1 gained a place, -1 lost one
+        self.move_at = 0.0
 
 
-class OverlayWidget(QWidget):
+class OverlayWidget(FramelessMixin, QWidget):
     def __init__(self, args, cfg):
         super().__init__()
         self.args = args
@@ -89,6 +97,7 @@ class OverlayWidget(QWidget):
         self.preview = False
         self.preview_start = 0.0
         self.preview_len = 40.0
+        self.board_done = False        # the results board was already queued for this race
 
         flags = Qt.WindowType.Window
         if args.frameless or args.transparent or not self.s.get("title_bar", False):
@@ -142,9 +151,14 @@ class OverlayWidget(QWidget):
         else:
             self.resize(BASE_W, 420)
 
+        self.board = ResultsBoard(self)
+
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
         self.timer.start(16)
+
+    def logical_w(self):
+        return BASE_W
 
     # ----- source wiring ------------------------------------------------------
     def attach(self, source):
@@ -210,27 +224,10 @@ class OverlayWidget(QWidget):
     def setup_race(self, sim, payload, rmap, collect=False):
         self.times, self.frames, self.results = sim["times"], sim["frames"], sim["results"]
         self.result_map = rmap
-        by_chara = {h.get("chara_id"): h for h in rmap.values() if h.get("chara_id")}
 
-        self.horses = []
-        for i, r in enumerate(payload.get("runners") or []):
-            h = Horse(r, i)
-            rm = rmap.get(h.id) or by_chara.get(h.chara_id) or {}
-            chara = rm.get("chara_id") or h.chara_id
-            h.chara_id = chara
-            h.card_id = rm.get("card_id") or (chara * 100 + 1 if chara else 0)
-            h.label = self.outfits.display(h.name, h.chara_id, h.dress_id)
-            base = h.chara_id * 100 + 1 if h.chara_id else 0
-            if h.trainer:
-                h.pkey = "p:" + h.trainer.strip().lower()
-                self.want_img(h.pkey, {"kind": "player", "trainer": h.trainer})
-            if h.card_id:
-                h.ukey = "c:%d" % h.card_id
-                self.want_img(h.ukey, {"kind": "uma", "card_id": h.card_id, "chara_id": h.chara_id, "name": h.name})
-            if base and base != h.card_id:
-                h.bkey = "c:%d" % base
-                self.want_img(h.bkey, {"kind": "uma", "card_id": base, "chara_id": h.chara_id, "name": h.name})
-            self.horses.append(h)
+        self.board_done = False
+        self.board.dismiss()                 # the results of the last race go away
+        self.horses = self.build_horses(payload, rmap)
 
         if collect:   # remember every trainer we see, so you can give them a picture
             for h in self.horses:
@@ -251,10 +248,45 @@ class OverlayWidget(QWidget):
         self.course_info = payload.get("courseInfo")
         self.final_clock_text = None
         self.compute(0.0)
-        if not self.args.no_autosize and self.horses:
-            need = HEADER_H + len(self.horses) * ROW_H + FOOT_PAD
-            self.resize(self.width(), int(need * self.width() / BASE_W))
+        self.fit_to_rows()
         self.update()
+
+    def build_horses(self, payload, rmap):
+        """One Horse per runner, with the picture keys set and the pictures requested."""
+        by_chara = {h.get("chara_id"): h for h in rmap.values() if h.get("chara_id")}
+        horses = []
+        for i, r in enumerate(payload.get("runners") or []):
+            h = Horse(r, i)
+            rm = rmap.get(h.id) or by_chara.get(h.chara_id) or {}
+            chara = rm.get("chara_id") or h.chara_id
+            h.chara_id = chara
+            h.card_id = rm.get("card_id") or (chara * 100 + 1 if chara else 0)
+            h.label = self.outfits.display(h.name, h.chara_id, h.dress_id)
+            base = h.chara_id * 100 + 1 if h.chara_id else 0
+            if h.trainer:
+                h.pkey = "p:" + h.trainer.strip().lower()
+                self.want_img(h.pkey, {"kind": "player", "trainer": h.trainer})
+            if h.card_id:
+                h.ukey = "c:%d" % h.card_id
+                self.want_img(h.ukey, {"kind": "uma", "card_id": h.card_id, "chara_id": h.chara_id, "name": h.name})
+            if base and base != h.card_id:
+                h.bkey = "c:%d" % base
+                self.want_img(h.bkey, {"kind": "uma", "card_id": base, "chara_id": h.chara_id, "name": h.name})
+            horses.append(h)
+        return horses
+
+    # ----- auto size: the window follows the number of umas ----------------------------
+    def visible_rows(self):
+        n = len(self.horses)
+        m = int(self.s.get("max_rows", 0) or 0)
+        return min(n, m) if m > 0 else n
+
+    def fit_to_rows(self):
+        """Make the window exactly as tall as the umas that are shown. When that is taller than the
+        screen, the whole tower is scaled down to fit (and goes back to your size for a smaller field)."""
+        if self.args.no_autosize or not self.horses:
+            return
+        fit_window(self, BASE_W, HEADER_H + self.visible_rows() * ROW_H + FOOT_PAD, self.pref_scale)
 
     def on_clock(self, p):
         now = time.monotonic()
@@ -275,6 +307,7 @@ class OverlayWidget(QWidget):
                 if self.frames:
                     max_t = max([r["finishTimeRaw"] for r in self.results] + [self.last_clock_time])
                     self.compute(max_t + 0.001)
+                    self.on_race_finished()
                 if not self.args.hold:
                     self.hide_deadline = now + self.args.hide_after
 
@@ -319,6 +352,7 @@ class OverlayWidget(QWidget):
                 h.y = h.target
             else:
                 h.y += (h.target - h.y) * k
+        self.board.tick(now, dt)
         self.update()
 
     # ----- tower maths (port of renderTime) ------------------------------------
@@ -367,6 +401,10 @@ class OverlayWidget(QWidget):
 
         for rank, e in enumerate(entries):
             h, res, fin = e["h"], e["res"], e["fin"]
+            if h.prev_rank is not None and rank != h.prev_rank and t > ARROW_AFTER:
+                h.move_dir = 1 if rank < h.prev_rank else -1
+                h.move_at = time.monotonic()
+            h.prev_rank = rank
             h.rank = rank
             h.target = rank * ROW_H
             if rank == 0:
@@ -469,17 +507,7 @@ class OverlayWidget(QWidget):
 
     def slide_dir(self):
         """-1 = the tower comes in from the left, +1 = from the right, 0 = no sliding (fade only)."""
-        mode = self.s.get("slide", "auto")
-        if mode == "left":
-            return -1
-        if mode == "right":
-            return 1
-        if mode == "off":
-            return 0
-        scr = self.screen()
-        if scr is None:
-            return 1
-        return 1 if self.geometry().center().x() > scr.geometry().center().x() else -1
+        return self.side_for(self.s.get("slide", "auto"))
 
     def paintEvent(self, _ev):
         p = QPainter(self)
@@ -517,26 +545,34 @@ class OverlayWidget(QWidget):
             e = 1.0 - (1.0 - max(0.0, min(1.0, self.slide))) ** 3      # ease out
             p.translate(d * (1.0 - e) * lw, 0)
         p.setOpacity(self.panel_alpha)
+        rows = self.visible_rows()
         if a.chroma or a.transparent:
-            need_h = HEADER_H + len(self.horses) * ROW_H + FOOT_PAD
+            need_h = HEADER_H + rows * ROW_H + FOOT_PAD
             path = QPainterPath()
             path.addRoundedRect(QRectF(0, 0, lw, min(lh, need_h)), 10, 10)
             p.fillPath(path, panel)
 
         self.draw_header(p, lw)
         p.save()
-        p.setClipRect(QRectF(0, HEADER_H, lw, max(0, lh - HEADER_H)))
+        # only the rows that are shown: a uma that drops out of the top N slides out under the clip edge
+        p.setClipRect(QRectF(0, HEADER_H, lw, max(0.0, min(lh - HEADER_H, rows * ROW_H))))
         for h in self.horses:
-            self.draw_row(p, h, lw)
+            self.draw_row(p, h, lw, rows)
         p.restore()
         p.end()
 
-    def draw_header(self, p, lw):
-        tc, sc = QColor(self.s["text_color"]), QColor(self.s["sub_color"])
-        info = self.course_info or {}
+    @staticmethod
+    def course_lines(info):
+        """('Tokyo · Turf · Mile 1600m', 'Left · Good · Sunny · Spring') from the race's courseInfo."""
+        info = info or {}
         dist = " ".join([x for x in (info.get("distType"), ("%sm" % info["distance"]) if info.get("distance") else "") if x])
         line1 = " · ".join([x for x in (info.get("trackName"), info.get("surface"), dist) if x]) or "Race"
         line2 = " · ".join([x for x in (info.get("direction"), info.get("ground"), info.get("weather"), info.get("season")) if x])
+        return line1, line2
+
+    def draw_header(self, p, lw):
+        tc, sc = QColor(self.s["text_color"]), QColor(self.s["sub_color"])
+        line1, line2 = self.course_lines(self.course_info)
 
         cw = int(lw - 115)   # room left of the clock
         f1, f2 = self.fnt(12, True), self.fnt(10)
@@ -571,10 +607,51 @@ class OverlayWidget(QWidget):
             p.drawText(rect, Qt.AlignmentFlag.AlignCenter, letter)
         p.restore()
 
-    def draw_row(self, p, h, lw):
+    def draw_pictures(self, p, h, rect, tc):
+        """The round picture(s) of one uma: the uma, the player, or the uma with a small player badge.
+        `rect` is the square for the big picture."""
+        mode = self.picture_mode()
+        upm, ppm = self.uma_pixmap(h), self.player_pixmap(h)
+        big = (ppm or upm) if mode == "player" else upm
+        # the circle is always dark, so the fallback letter is always white (not the text colour)
+        self.draw_circle_picture(p, rect, big, (h.name[:1] or "?"), QColor("#ffffff"))
+        if mode == "both" and ppm:      # small player picture on the corner of the uma picture
+            bs = rect.width() / 2.0
+            badge = QRectF(rect.right() - bs + 2, rect.bottom() - bs + 3, bs, bs)
+            ring = QColor(self.s["bg"])
+            p.setPen(QPen(ring, 2))
+            p.setBrush(ring)
+            p.drawEllipse(badge.adjusted(-1.5, -1.5, 1.5, 1.5))
+            self.draw_circle_picture(p, badge, ppm, "", tc)
+
+    def draw_rank_arrow(self, p, h, y):
+        """A small green up / red down triangle above / below the rank number; it fades out."""
+        if not h.move_dir or not self.s.get("rank_arrows", True):
+            return
+        age = time.monotonic() - h.move_at
+        if age >= ARROW_SECONDS:
+            h.move_dir = 0
+            return
+        solid = ARROW_SECONDS * 0.6
+        fade = 1.0 if age < solid else max(0.0, (ARROW_SECONDS - age) / (ARROW_SECONDS - solid))
+        col = QColor("#2ecc71" if h.move_dir > 0 else "#e74c3c")
+        col.setAlphaF(fade)
+        cx = 15.0
+        tri = QPainterPath()
+        if h.move_dir > 0:
+            cy = y + 7
+            tri.moveTo(cx, cy - 3.5); tri.lineTo(cx + 4.5, cy + 2.5); tri.lineTo(cx - 4.5, cy + 2.5)
+        else:
+            cy = y + ROW_H - 7
+            tri.moveTo(cx, cy + 3.5); tri.lineTo(cx + 4.5, cy - 2.5); tri.lineTo(cx - 4.5, cy - 2.5)
+        tri.closeSubpath()
+        p.fillPath(tri, col)
+
+    def draw_row(self, p, h, lw, rows=None):
         tc, sc = QColor(self.s["text_color"]), QColor(self.s["sub_color"])
         y = HEADER_H + (h.y if h.y is not None else h.target)
-        if y > self.height() / (self.width() / BASE_W) + ROW_H:
+        limit = HEADER_H + (rows if rows is not None else len(self.horses)) * ROW_H
+        if y >= limit or y > self.height() / (self.width() / BASE_W) + ROW_H:
             return
         # podium underline
         if h.rank < 3:
@@ -586,21 +663,11 @@ class OverlayWidget(QWidget):
         p.setFont(self.fnt(17, True))
         p.setPen(QColor(PODIUM[h.rank]) if h.rank < 3 else tc)
         p.drawText(QRectF(2, y, 26, ROW_H), Qt.AlignmentFlag.AlignCenter, str(h.rank + 1))
+        self.draw_rank_arrow(p, h, y)
 
         # pictures: the uma and the player are two separate pictures
-        mode = self.picture_mode()
-        upm, ppm = self.uma_pixmap(h), self.player_pixmap(h)
         ax, ay, asz = 30, y + 7, 34
-        big = (ppm or upm) if mode == "player" else upm
-        self.draw_circle_picture(p, QRectF(ax, ay, asz, asz), big, (h.name[:1] or "?"), tc)
-        if mode == "both" and ppm:      # small player picture on the corner of the uma picture
-            bs = 17
-            badge = QRectF(ax + asz - bs + 2, ay + asz - bs + 3, bs, bs)
-            ring = QColor(self.s["bg"])
-            p.setPen(QPen(ring, 2))
-            p.setBrush(ring)
-            p.drawEllipse(badge.adjusted(-1.5, -1.5, 1.5, 1.5))
-            self.draw_circle_picture(p, badge, ppm, "", tc)
+        self.draw_pictures(p, h, QRectF(ax, ay, asz, asz), tc)
 
         # gate badge
         gi = max(0, min(7, (h.gate or 1) - 1))
@@ -680,6 +747,7 @@ class OverlayWidget(QWidget):
         m.addSeparator()
         self.act_show = m.addAction("Show overlay window", lambda: self.set_overlay_visible(not self.window_wanted()))
         m.addAction("Menu / Settings...", self.open_settings)
+        self.act_board = m.addAction("Show results board (to place it)", lambda: self.set_board_pinned(not self.board.pinned))
         self.act_prev = m.addAction("Show preview race")
         self.act_prev.setCheckable(True)
         self.act_prev.triggered.connect(lambda on: self.set_preview(on))
@@ -709,6 +777,7 @@ class OverlayWidget(QWidget):
 
     def sync_tray_menu(self):
         self.act_show.setText("Hide overlay window" if self.window_wanted() else "Show overlay window")
+        self.act_board.setText("Hide results board" if self.board.pinned else "Show results board (to place it)")
         self.act_prev.setChecked(self.preview)
         for mode, act in self.pic_actions.items():
             act.setChecked(mode == self.picture_mode())
@@ -737,6 +806,8 @@ class OverlayWidget(QWidget):
         if self.isVisible():
             g = self.geometry()
             self.cfg["geometry"] = [g.x(), g.y(), g.width(), g.height()]
+        if self.board.isVisible() or self.board.entries:
+            self.board.remember()
         save_config(self.cfg)
         try:
             self.source.stop()
@@ -753,6 +824,8 @@ class OverlayWidget(QWidget):
         if self.isVisible():
             g = self.geometry()
             self.cfg["geometry"] = [g.x(), g.y(), g.width(), g.height()]
+        if self.board.isVisible() or self.board.entries:
+            self.board.remember()
         save_config(self.cfg)
         try:
             self.source.stop()
@@ -762,6 +835,7 @@ class OverlayWidget(QWidget):
             self.dialog.close()
         if self.tray is not None:
             self.tray.hide()
+        self.board.close()
         self.close()
         QApplication.instance().quit()
 
@@ -798,10 +872,24 @@ class OverlayWidget(QWidget):
         self.save_settings()
         if key in ("on_top", "title_bar"):
             self.apply_flags()
+            self.board.apply_flags()
+        if key == "max_rows":
+            self.fit_to_rows()
         if key == "start_delay" and getattr(self, "source", None) is not None:
             self.source.delay = float(value)
         if key == "auto_hide":
             self.sync_window_visibility()
+        self.board.update()
+        self.update()
+
+    def apply_theme(self, name):
+        """Apply one of the colour sets from THEME_PRESETS."""
+        preset = THEME_PRESETS.get(name)
+        if not preset:
+            return
+        self.s.update(preset)
+        self.save_settings()
+        self.board.update()
         self.update()
 
     def apply_flags(self):
@@ -832,6 +920,9 @@ class OverlayWidget(QWidget):
         self.s.update(keep)          # only the look is reset, not your folder / source / update link
         self.save_settings()
         self.apply_flags()
+        self.board.apply_flags()
+        self.fit_to_rows()
+        self.board.update()
         self.update()
 
     def open_settings(self):
@@ -877,18 +968,10 @@ class OverlayWidget(QWidget):
         self.refresh_player_images()
 
     # ----- preview -------------------------------------------------------------
-    def set_preview(self, on):
+    def build_preview_race(self):
+        """A made-up 8 uma race. Returns (sim, payload, rmap, finish_times)."""
         import math
         import random
-        if not on:
-            if self.preview:
-                self.preview = False
-                self.racing = False
-                self.horses, self.frames, self.times, self.results = [], [], [], []
-                self.update()
-            return
-        if self.clock_active or (self.racing and not self.preview):
-            return  # a real race is running - do not disturb it
         rnd = random.Random(7)
         umas = [("Special Week", 1001), ("Silence Suzuka", 1002), ("Tokai Teio", 1003), ("Maruzensky", 1004),
                 ("Taiki Shuttle", 1005), ("Oguri Cap", 1006), ("Gold Ship", 1007), ("Vodka", 1008)]
@@ -913,55 +996,76 @@ class OverlayWidget(QWidget):
         payload = {"runners": runners, "courseShape": {"distance": 1600}, "courseData": {"distance": 1600},
                    "courseInfo": {"trackName": "Preview", "surface": "Turf", "distType": "Mile", "distance": 1600,
                                   "direction": "Left", "ground": "Good", "weather": "Sunny", "season": "Spring"}}
+        return {"times": times, "frames": frames, "results": results}, payload, rmap, fins
+
+    def set_preview(self, on):
+        if not on:
+            if self.preview:
+                self.preview = False
+                self.racing = False
+                self.horses, self.frames, self.times, self.results = [], [], [], []
+                self.update()
+            return
+        if self.clock_active or (self.racing and not self.preview):
+            return  # a real race is running - do not disturb it
+        sim, payload, rmap, fins = self.build_preview_race()
         self.hide_deadline = None
-        self.setup_race({"times": times, "frames": frames, "results": results}, payload, rmap)
+        self.setup_race(sim, payload, rmap)
         self.preview = True
         self.preview_start = time.monotonic()
         self.preview_len = max(fins) + 4.0
         self.racing = True
 
-    # ----- mouse / keyboard / menu ---------------------------------------------
-    def _edges_at(self, pos):
-        m = 7
-        e = Qt.Edge(0)
-        if pos.x() <= m:
-            e |= Qt.Edge.LeftEdge
-        if pos.x() >= self.width() - m:
-            e |= Qt.Edge.RightEdge
-        if pos.y() <= m:
-            e |= Qt.Edge.TopEdge
-        if pos.y() >= self.height() - m:
-            e |= Qt.Edge.BottomEdge
-        return e
-
-    def mouseMoveEvent(self, ev):
-        if not (self.windowFlags() & Qt.WindowType.FramelessWindowHint):
+    # ----- results board ---------------------------------------------------------------
+    def on_race_finished(self):
+        """The race is over and every uma has its final place: queue the results board."""
+        if self.board_done or not self.horses:
             return
-        e = self._edges_at(ev.position().toPoint())
-        L, R, T, B = Qt.Edge.LeftEdge, Qt.Edge.RightEdge, Qt.Edge.TopEdge, Qt.Edge.BottomEdge
-        if (e & L and e & T) or (e & R and e & B):
-            self.setCursor(Qt.CursorShape.SizeFDiagCursor)
-        elif (e & R and e & T) or (e & L and e & B):
-            self.setCursor(Qt.CursorShape.SizeBDiagCursor)
-        elif e & L or e & R:
-            self.setCursor(Qt.CursorShape.SizeHorCursor)
-        elif e & T or e & B:
-            self.setCursor(Qt.CursorShape.SizeVerCursor)
-        else:
-            self.unsetCursor()
+        self.board_done = True
+        if not self.s.get("results_board", True):
+            return
+        # it comes in as the tower goes out, so the two are never both full-size at the same time
+        delay = 1.0 if self.args.hold else max(0.5, float(self.args.hide_after))
+        line1, _line2 = self.course_lines(self.course_info)
+        self.board.present(self.results_entries(), line1, delay)
 
-    def mousePressEvent(self, ev):
-        # no title bar: drag the window with the left mouse button, resize from the edges
-        if ev.button() == Qt.MouseButton.LeftButton and self.windowFlags() & Qt.WindowType.FramelessWindowHint:
-            wh = self.windowHandle()
-            if wh is None:
-                return
-            e = self._edges_at(ev.position().toPoint())
-            if e and hasattr(wh, "startSystemResize"):
-                wh.startSystemResize(e)
-            elif hasattr(wh, "startSystemMove"):
-                wh.startSystemMove()
+    def results_entries(self):
+        """Final placings, best first: place (ties share one), finish time and the gap to the winner."""
+        out, win_t, prev_t, place = [], None, None, 0
+        for i, h in enumerate(sorted(self.horses, key=lambda x: x.rank)):
+            res = self.results[h.frame_idx] if h.frame_idx < len(self.results) else None
+            t = float(res["finishTimeRaw"]) if res and res["finishTimeRaw"] > 0 else 0.0
+            if t > 0 and prev_t is not None and abs(t - prev_t) < 0.0005:
+                pass                                   # a tie: same place as the uma before
+            else:
+                place = i + 1
+            if t > 0:
+                if win_t is None:
+                    win_t = t
+                gap = "Winner" if t == win_t and place == 1 else "+%.3f" % (t - win_t)
+            else:
+                gap = ""
+            out.append({"h": h, "place": place, "time": fmt_time(t) if t > 0 else "--", "gap": gap})
+            prev_t = t if t > 0 else prev_t
+        return out
 
+    def sample_results(self):
+        """Made-up placings, to place and style the board before any race has been run."""
+        sim, payload, rmap, fins = self.build_preview_race()
+        horses = self.build_horses(payload, rmap)
+        order = sorted(range(len(horses)), key=lambda i: fins[i])
+        out = []
+        for place, i in enumerate(order, 1):
+            out.append({"h": horses[i], "place": place, "time": fmt_time(fins[i]),
+                        "gap": "Winner" if place == 1 else "+%.3f" % (fins[i] - fins[order[0]])})
+        return out, self.course_lines(payload["courseInfo"])[0]
+
+    def set_board_pinned(self, on):
+        """'Show results board': keep it on screen to place it. Shows sample placings if no race ran yet."""
+        self.board.set_pinned(on, self.sample_results() if on and not self.board.entries else None)
+        self.refresh_tray()
+
+    # ----- menu / keyboard --------------------------------------------------------------
     def contextMenuEvent(self, ev):
         m = QMenu(self)
         m.addAction("Settings...", self.open_settings)
@@ -978,6 +1082,8 @@ class OverlayWidget(QWidget):
         a3.setCheckable(True)
         a3.setChecked(self.preview)
         a3.toggled.connect(self.set_preview)
+        m.addAction("Show results board (to place it)" if not self.board.pinned else "Hide results board",
+                    lambda: self.set_board_pinned(not self.board.pinned))
         m.addSeparator()
         if self.tray_active:
             m.addAction("Hide overlay window", lambda: self.set_overlay_visible(False))

@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSlider,
+    QSpinBox,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -31,7 +32,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from .constants import APP_NAME, APP_VERSION, SCRIPT_DIR, STATE_COLORS
+from .constants import APP_NAME, APP_VERSION, SCRIPT_DIR, STATE_COLORS, THEME_PRESETS
 from .databases import BUILTIN_OUTFITS
 from .sources import choose_source, count_race_files
 from .theme import Banner, THEME, build_theme_qss
@@ -95,6 +96,9 @@ class SettingsDialog(QDialog):
         row_b.addWidget(self.btn_show)
         row_b.addWidget(self.btn_prev2)
         mv.addLayout(row_b)
+        self.btn_board = QPushButton("Show results board (to place it)")
+        self.btn_board.clicked.connect(lambda: ov.set_board_pinned(not ov.board.pinned))
+        mv.addWidget(self.btn_board)
         self.note_show = QLabel()
         self.note_show.setWordWrap(True)
         mv.addWidget(self.note_show)
@@ -274,6 +278,13 @@ class SettingsDialog(QDialog):
             lambda i: ov.set_setting("pictures", self._pic_modes[i]))
         f.addRow("Pictures", self.cmb_avatar)
 
+        self.cmb_theme = QComboBox()
+        self.cmb_theme.addItem("Choose a colour set...")
+        self.cmb_theme.addItems(list(THEME_PRESETS))
+        self.cmb_theme.activated.connect(self.on_theme)
+        self.cmb_theme.setToolTip("Sets the background, text and accent colours in one go. You can still change each colour below.")
+        f.addRow("Colour set", self.cmb_theme)
+
         self.btn_bg = QPushButton()
         self.btn_bg.clicked.connect(lambda: self.pick("bg", self.btn_bg))
         f.addRow("Background colour", self.btn_bg)
@@ -291,6 +302,10 @@ class SettingsDialog(QDialog):
         self.btn_sc = QPushButton()
         self.btn_sc.clicked.connect(lambda: self.pick("sub_color", self.btn_sc))
         f.addRow("Small text colour", self.btn_sc)
+
+        self.btn_ac = QPushButton()
+        self.btn_ac.clicked.connect(lambda: self.pick("accent", self.btn_ac))
+        f.addRow("Accent colour\n(results board)", self.btn_ac)
 
         row = QHBoxLayout()
         self.sl_size = QSlider(Qt.Orientation.Horizontal)
@@ -314,6 +329,37 @@ class SettingsDialog(QDialog):
         row2.addWidget(self.cb_deffont)
         row2.addWidget(self.font_box, 1)
         f.addRow("Font", row2)
+
+        self.cb_arrows = QCheckBox("Show an arrow when a uma gains or loses a place")
+        self.cb_arrows.setChecked(bool(s.get("rank_arrows", True)))
+        self.cb_arrows.toggled.connect(lambda on: ov.set_setting("rank_arrows", on))
+        f.addRow("Position arrows", self.cb_arrows)
+
+        self.sp_rows = QSpinBox()
+        self.sp_rows.setRange(0, 18)
+        self.sp_rows.setSpecialValueText("All of them")
+        self.sp_rows.setSuffix(" rows")
+        self.sp_rows.setValue(int(s.get("max_rows", 0) or 0))
+        self.sp_rows.valueChanged.connect(lambda v: ov.set_setting("max_rows", int(v)))
+        self.sp_rows.setToolTip("Show only the first places in the tower. The window height follows the number of rows.")
+        f.addRow("Rows in the tower", self.sp_rows)
+
+        self.cb_board = QCheckBox("Show the results board after each race")
+        self.cb_board.setChecked(bool(s.get("results_board", True)))
+        self.cb_board.toggled.connect(lambda on: ov.set_setting("results_board", on))
+        self.cb_board.setToolTip("A second window ('Umamusume Race Results (Linux)') with the final places.\n"
+                                 "Add it as its own window source in OBS. Use 'Show results board' in the Menu tab to place it.")
+        f.addRow("Results board", self.cb_board)
+
+        self.sp_board = QDoubleSpinBox()
+        self.sp_board.setRange(0.0, 120.0)
+        self.sp_board.setDecimals(0)
+        self.sp_board.setSingleStep(1.0)
+        self.sp_board.setSpecialValueText("Until the next race")
+        self.sp_board.setSuffix(" seconds")
+        self.sp_board.setValue(float(s.get("results_seconds", 10.0)))
+        self.sp_board.valueChanged.connect(lambda v: ov.set_setting("results_seconds", float(v)))
+        f.addRow("Results board stays", self.sp_board)
 
         self.cb_prev = QCheckBox("Show a preview race (to see your changes)")
         self.cb_prev.toggled.connect(ov.set_preview)
@@ -599,6 +645,7 @@ class SettingsDialog(QDialog):
         self.swatch(self.btn_bg, s["bg"])
         self.swatch(self.btn_tc, s["text_color"])
         self.swatch(self.btn_sc, s["sub_color"])
+        self.swatch(self.btn_ac, s.get("accent") or "#f5c518")
         self.lbl_size.setText("%d%%" % int(float(s["text_scale"]) * 100))
 
     def pick(self, key, btn):
@@ -606,6 +653,12 @@ class SettingsDialog(QDialog):
         if c.isValid():
             self.ov.set_setting(key, c.name())
             self.swatch(btn, c.name())
+
+    def on_theme(self, i):
+        if i <= 0:
+            return
+        self.ov.apply_theme(self.cmb_theme.itemText(i))
+        self.sync_widgets()
 
     def on_size(self, v):
         self.lbl_size.setText("%d%%" % v)
@@ -627,6 +680,9 @@ class SettingsDialog(QDialog):
         self.sl_op.setValue(int(s["bg_opacity"] * 100))
         self.sl_size.setValue(int(s["text_scale"] * 100))
         self.cb_deffont.setChecked(True)
+        self.cb_arrows.setChecked(bool(s["rank_arrows"]))
+        self.sp_rows.setValue(int(s["max_rows"]))
+        self.cmb_theme.setCurrentIndex(0)
         self.sync_widgets()
 
     def poll(self):
@@ -645,6 +701,8 @@ class SettingsDialog(QDialog):
             self.note_show.setText("OBS can only capture the overlay while its window is shown. "
                                    "Press the button once and the choice is remembered for the next start.")
         self.btn_prev2.setText("Stop preview" if ov.preview else "Show preview race")
+        self.btn_board.setText("Done placing: hide the results board" if ov.board.pinned
+                               else "Show results board (to place it)")
         self.cb_prev.blockSignals(True)
         self.cb_prev.setChecked(self.ov.preview)
         self.cb_prev.blockSignals(False)

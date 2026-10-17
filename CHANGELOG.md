@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.4.0
+
+- **New:** **results board.** After a race a second window (*Umamusume Race Results (Linux)*) shows the final places in two columns like a TV results graphic: place, picture, trainer and uma, finish time, gap to the winner, and the track name at the bottom. It slides in as the tower slides out. Add it to OBS as its own window source. Turn it on or off and choose how long it stays in the Look tab. *Show results board (to place it)* in the Menu and tray lets you position it before a race.
+- **New:** **position arrows.** A small green up / red down arrow next to the rank when a uma gains or loses a place (Look tab to turn off).
+- **New:** **auto size.** The window height now follows the umas that are shown (also when a setting changes), and the whole tower is scaled down when it would be taller than the screen. Your own size comes back for a smaller field.
+- **New:** **Rows in the tower** (Look tab): show only the top N umas.
+- **New:** **colour sets** (Look tab): Midnight, Charcoal and gold, Sakura, Mint, Daylight, High contrast. New **accent colour** setting for the results board.
+- **New:** on a Wayland desktop the program starts through XWayland so the window can stay on top and OBS can capture it. `--keep-wayland` turns this off. See the new Wayland section in the README.
+- **Better:** `settings.sh` finds Steam (also the Flatpak version) and the newest GE-Proton by itself instead of fixed paths, and every value can be set from outside. An existing `settings.sh` is still never overwritten by the updater.
+- **Better:** the fallback letter in a picture circle is always white, so it can be read on light colour sets.
+- **Better:** the move / resize code is shared by both windows (new `race_overlay/frameless.py`); the Rows spin box has the same look as the other inputs.
+- **Fix:** removed the duplicate `gitignore` file, the hard coded `/home/darryl/...` paths and the outdated version in `latest.json.example`.
+- **Note:** install this version by copying the whole folder, because it adds two new files in `race_overlay/` (`results_board.py` and `frameless.py`). The updater accepts them.
+
 ## 1.3.0
 
 - **New:** the uma image and the player picture are now two separate pictures. The uma always shows its own image; the player gets a small picture on its corner. Choose *Uma image + player picture*, *Uma image only* or *Player picture* in the Look tab, the tray menu or the right-click menu (the **T** key cycles through them). A player without a picture shows no small picture.

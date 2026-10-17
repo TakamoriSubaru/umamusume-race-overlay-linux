@@ -4,7 +4,7 @@
 
 **A native Linux race tower for Uma Musume: Pretty Derby, made for OBS.**
 
-![Platform](https://img.shields.io/badge/platform-Linux%20(X11)-blue)
+![Platform](https://img.shields.io/badge/platform-Linux%20(X11%20%2F%20XWayland)-blue)
 ![Python](https://img.shields.io/badge/python-3.9%2B-3776AB)
 ![Qt](https://img.shields.io/badge/UI-PyQt6-41CD52)
 ![OBS](https://img.shields.io/badge/OBS-Window%20Capture-302E31)
@@ -28,7 +28,10 @@
 - [Modes](#-modes)
 - [Saved races folder](#-saved-races-folder)
 - [Hidden until the race, slide-in](#-hidden-until-the-race-slide-in)
+- [Results board](#-results-board)
+- [Tower options](#-tower-options)
 - [Alternative outfits](#-alternative-outfits)
+- [Wayland](#-wayland)
 - [Keys and mouse](#-keys-and-mouse)
 - [Command line options](#-command-line-options)
 - [Updating](#-updating)
@@ -49,6 +52,10 @@
 - 👗 **Alternative outfits:** shown as *Meisho Doto (Halloween)*, the normal outfit as just *Meisho Doto* (new in 1.2.0)
 - 🌙 **Dark settings window** with a pink, yellow and mint theme (new in 1.1.0)
 - 📂 **Saved races folder:** pick the folder in Settings; the folders inside it (Career, Room match, ...) are searched too (new in 1.1.0)
+- 🏁 **Results board:** after the race a second window shows the final places in two columns, like a TV results graphic, with finish times, the gap to the winner and the track name (new in 1.4.0)
+- ▲▼ **Position arrows:** a small green / red arrow when a uma gains or loses a place (new in 1.4.0)
+- 📏 **Auto size:** the window follows the number of umas, and shrinks to fit your screen when 18 umas are too tall; optionally show only the top N rows (new in 1.4.0)
+- 🎨 **Colour sets:** Midnight, Charcoal and gold, Sakura, Mint, Daylight and High contrast in one click (new in 1.4.0)
 - 🎨 **Customize:** background colour, text colour, text size, font, always on top, title bar on/off
 - 🖼️ **Player pictures:** every trainer you race against is collected automatically, you just add the pictures
 - 🖼️ **Uma image and player picture are separate:** the uma always keeps its own image and the player gets a small picture on its corner (or choose uma only / player only, press **T** to switch)
@@ -116,6 +123,8 @@ On start you get a **tray icon** and the **Menu** window. The overlay itself is 
 
 The tower shows up when a race starts and stays a few seconds after it finishes (`--hold` keeps it until the next race).
 
+The **results board** is its own window: add a second **Window Capture (Xcomposite)** source and pick **Umamusume Race Results (Linux)**. In the Menu press **Show results board (to place it)** once to put it where you want it on the stream, then press it again to hide it. It only appears after a race.
+
 ---
 
 ## 🖼️ Player pictures and uma faces
@@ -180,6 +189,34 @@ Good to know:
 
 ---
 
+## 🏁 Results board
+
+<img src="docs/results-board.png" alt="Results board" width="520">
+
+When the race ends the tower slides out and the results board slides in. It shows every uma in finishing order, with the finish time and the gap to the winner, and the track name at the bottom. Up to 6 umas are shown in one column, more are split into two columns. The window sizes itself to the number of umas; pull its edges to make it bigger or smaller and the size is remembered.
+
+- It is a separate window called **Umamusume Race Results (Linux)**, so you can place it anywhere on the stream, independent of the tower.
+- **Look tab:** turn it on or off, and choose how long it stays (or *Until the next race*). `--hold` keeps it until the next race too.
+- It uses the same colours, font, picture choice (uma / player / both) and slide direction as the tower. The *Accent colour* is the title line and the track name.
+- **Menu tab / tray menu:** *Show results board (to place it)* shows it with sample places, so you can position and style it before any race has been run.
+- Equal finish times share one place. A uma without a finish time shows `--`.
+- `Esc` or right click, *Hide the results board*, closes it early.
+
+---
+
+## 🧱 Tower options
+
+All in the **Look** tab:
+
+| Setting | What it does |
+| --- | --- |
+| **Position arrows** | A small green ▲ / red ▼ next to the rank when a uma gains or loses a place. It fades after about 2.5 seconds. Nothing shows in the first 3 seconds of a race, while everybody leaves the gates. |
+| **Rows in the tower** | Show only the top N umas (*All of them* = no limit). The window gets shorter to match, and a uma that drops out of the top N slides out of view. |
+| **Colour set** | One click sets the background, text, small text and accent colours. Every colour can still be changed afterwards. |
+| **Auto size** | Always on (turn it off with `--no-autosize`). The height follows the rows that are shown. If the tower would be taller than your screen (for example 18 umas on a laptop), it is scaled down to fit and goes back to your own size for a smaller field. |
+
+---
+
 ## 👗 Alternative outfits
 
 <div align="center">
@@ -203,6 +240,8 @@ A uma in her normal outfit is shown with just her name. In another outfit the to
 | `T` | Pictures: uma + player, uma only, player |
 | `Esc` | Hide the overlay (it keeps running in the tray) |
 
+*In the results board window:* drag to move, pull an edge to resize, right click for the menu, `Esc` to hide it.
+
 ---
 
 ## 🧰 Command line options
@@ -219,7 +258,8 @@ Run `./start_overlay.sh --help` for the full list. The most useful:
 | `--quit-with-game` | Close a few seconds after the game closes |
 | `--watch FOLDER` | Watch mode (the folder is remembered) |
 | `--demo FILE` | Replay a saved race |
-| `--hold` | Keep the tower on screen until the next race |
+| `--hold` | Keep the tower (and the results board) on screen until the next race |
+| `--keep-wayland` | On a Wayland desktop, do not switch to XWayland (see [Wayland](#-wayland)) |
 | `--version` | Print the version |
 
 ---
@@ -249,6 +289,8 @@ race_overlay/             the program, one file per part:
   sources.py                live server, saved races (watch) and demo
   databases.py, images.py   players / outfits lists and picture loading
   overlay_widget.py         the overlay window and the race tower
+  results_board.py          the results board window (after the race)
+  frameless.py              shared by both windows: move / resize, slide side, auto size
   settings_dialog.py        the Menu / Settings window
   theme.py, tray.py         look of the settings window, tray icon
   updater.py                updating with a backup
@@ -271,6 +313,14 @@ Settings are stored in `~/.config/race-overlay-native/config.json`.
 
 ---
 
+## 🖥️ Wayland
+
+The program works best through X11. On a Wayland desktop it starts itself **through XWayland** (Qt's `xcb` platform) when it finds `XDG_SESSION_TYPE=wayland` and a `DISPLAY`, and prints a line about it. That way the window can stay on top, can be moved and resized, and shows up in OBS's window list. Set `QT_QPA_PLATFORM` yourself, or pass `--keep-wayland`, to skip this.
+
+OBS has to see X11 windows too. If **Window Capture (Xcomposite)** is missing in OBS, or the window is not listed, start OBS through XWayland as well: `QT_QPA_PLATFORM=xcb obs`. Otherwise use OBS's PipeWire based **Window Capture** source and pick the window in the dialog your desktop shows. If Qt complains about `xcb-cursor`, install `libxcb-cursor0` (Debian / Ubuntu) or `xcb-util-cursor` (Fedora / Arch).
+
+---
+
 ## 🛠️ Troubleshooting
 
 | Problem | Try this |
@@ -279,13 +329,15 @@ Settings are stored in `~/.config/race-overlay-native/config.json`.
 | Status stays yellow | The game is not running yet, or its name was not found. The overlay looks for `umamusume` in process names (`GAME_MATCH` in `settings.sh`). |
 | Status is red | Race Overlay is not running or not reachable. Check `/tmp/race-overlay-wine.log` and the paths in `settings.sh`. |
 | `wine: failed to open "C:\Race Overlay\Race Overlay.exe": c0000135` in the log | Wine cannot start Race Overlay. Either it is installed in a different Wine prefix than `WINEPREFIX_DIR` in `settings.sh` (find it with `find ~ -iname "Race Overlay.exe"`), or that prefix is missing a runtime Race Overlay needs. Until it runs, use the **Saved races** source in the Races tab. |
-| OBS shows a black window | Use `--chroma` with a Chroma Key filter. Make sure you are on X11, not Wayland. |
+| OBS shows a black window | Use `--chroma` with a Chroma Key filter. On Wayland read the [Wayland](#-wayland) section. |
 | OBS cannot find the window | Press **Show overlay window** in the Menu. A hidden window cannot be captured. |
 | No tray icon | Your desktop may not show tray icons. The overlay then stays visible so you can still use it (right-click for the menu). |
 | Faces are letters, not pictures | The `character_thumbs` folder was not found. Copy it into `images/uma/`. |
 | The tower appears before the gates open (saved races) | Raise **Start delay** in the Races tab. It is an estimate: live mode is exact. |
 | The tower appears too late (saved races) | Lower **Start delay**, or nudge with the arrow keys. |
 | I cannot see the overlay window | That is normal before a race: it is hidden until the race starts. Use **Show overlay window (to place it)** in the Menu, or untick **Hide the window until a race starts** in the Look tab. |
+| The results board does not show after a race | Check *Show the results board after each race* in the Look tab. It appears when the tower slides out, so a race that is closed early (no finish) shows none. In OBS it is a second source: **Umamusume Race Results (Linux)**. |
+| The results board is not where I want it | Press **Show results board (to place it)** in the Menu, drag it, then press the button again. The place is remembered. |
 | A uma shows *(Alt)* | It is an alternative outfit without a name. Name it in the **Outfits** tab. |
 
 ---
@@ -294,7 +346,8 @@ Settings are stored in `~/.config/race-overlay-native/config.json`.
 
 Planned, not released yet:
 
-- [ ] **NASCAR style overlay:** a small corner overlay during the race (top ~5 with rank, name and gap) that expands into a full results board when the race finishes
+- [x] ~~**NASCAR style overlay:** full results board when the race finishes~~ (done in 1.4.0: the results board; *Rows in the tower* gives the short top-N tower)
+- [ ] **Corner overlay:** a dedicated small top ~5 view during the race that grows into the results board
 - [ ] **Standings board:** show every player's score after a bracket, read from a `.xlsx` / `.csv` file (or a published Google Sheets CSV link), reloaded automatically when the file changes
 
 ---

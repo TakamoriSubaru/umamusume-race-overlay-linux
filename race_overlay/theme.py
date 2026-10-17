@@ -72,7 +72,7 @@ QPushButton#primary { background: %(grad)s; color: #2a1020; border: none; }
 QPushButton#primary:hover { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #ff86bd, stop:1 #ffb085); }
 QPushButton#danger { background: #3a1f33; border-color: #7a3a63; color: #ffc2dc; }
 QPushButton#danger:hover { background: #5a2850; border-color: %(pink)s; }
-QLineEdit, QComboBox, QFontComboBox, QDoubleSpinBox { background: %(input)s; border: 1px solid #4a4068; border-radius: 10px;
+QLineEdit, QComboBox, QFontComboBox, QSpinBox, QDoubleSpinBox { background: %(input)s; border: 1px solid #4a4068; border-radius: 10px;
                                       padding: 6px 10px; selection-background-color: %(pink)s;
                                       selection-color: #2a1020; }
 QLineEdit:focus, QComboBox:focus { border-color: %(pink)s; }
