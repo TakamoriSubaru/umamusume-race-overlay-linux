@@ -214,6 +214,15 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.preview = False
         self.hide_deadline = None
         self.racing = False
+        # A new race payload can arrive before the previous race's final clock event
+        # has been processed (especially when the game is sped up or skipped). Clear
+        # stale clock state so the new race only becomes visible when its own clock
+        # reports that it is active.
+        self.clock_active = False
+        self.clock_paused = False
+        self.prev_clock = -1.0
+        self.last_clock_time = 0.0
+        self.last_clock_at = time.monotonic()
         try:
             sim = parse_sim(payload["replay"])
         except Exception as e:
