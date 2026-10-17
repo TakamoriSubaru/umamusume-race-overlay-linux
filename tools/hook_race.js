@@ -1,11 +1,10 @@
-/* tools/hook_race.js - Umamusume Race Simulation Memory Hook via Frida */
-console.log("[*] Loading Umamusume race simulation memory hook...");
+/* tools/hook_race.js - Umamusume Race Memory Hook */
+console.log("[*] Loading Umamusume memory hook script...");
 
-function hookGame() {
+function initHook() {
     var gameAssembly = Module.findBaseAddress("GameAssembly.dll");
     if (!gameAssembly) {
-        console.log("[*] Waiting for GameAssembly.dll...");
-        setTimeout(hookGame, 1000);
+        setTimeout(initHook, 1000);
         return;
     }
 
@@ -14,20 +13,17 @@ function hookGame() {
     if (typeof Il2Cpp !== "undefined") {
         Il2Cpp.perform(function () {
             try {
-                console.log("[+] IL2CPP attached successfully.");
                 var assembly = Il2Cpp.domain.assembly("Assembly-CSharp");
                 if (!assembly) {
-                    console.log("[-] Assembly-CSharp not found yet. Retrying...");
-                    setTimeout(hookGame, 2000);
+                    setTimeout(initHook, 2000);
                     return;
                 }
 
                 var image = assembly.image;
-                var raceManagerClass = image.class("Gallop.RaceSimulateManager");
-                if (raceManagerClass) {
-                    console.log("[+] Found Gallop.RaceSimulateManager!");
-                    
-                    var updateMethod = raceManagerClass.method("Update");
+                var raceSimClass = image.class("Gallop.RaceSimulateManager");
+                
+                if (raceSimClass) {
+                    var updateMethod = raceSimClass.method("Update");
                     if (updateMethod) {
                         updateMethod.implementation = function () {
                             try {
@@ -41,26 +37,22 @@ function hookGame() {
                                         time: Number(raceTime) || 0.0
                                     }
                                 });
-                            } catch (err) {
-                                // Silent fail during scene transitions
+                            } catch (e) {
+                                // Ignore field read exceptions during scene changes
                             }
                             return this.Update();
                         };
-                        console.log("[+] Hooked RaceSimulateManager.Update successfully!");
+                        console.log("[+] Successfully hooked RaceSimulateManager.Update!");
                     }
-                } else {
-                    console.log("[-] Gallop.RaceSimulateManager class not found in image.");
                 }
 
-                send({ event: "status", message: "Frida memory hooks active and monitoring race state." });
+                send({ event: 'status', message: 'Frida hooks active: waiting for simulation...' });
 
-            } catch (e) {
-                console.log("[-] Error during IL2CPP perform: " + e);
+            } catch (ex) {
+                console.log("[-] IL2CPP Hook error: " + ex);
             }
         });
-    } else {
-        console.log("[-] Frida Il2Cpp module wrapper not detected.");
     }
 }
 
-setImmediate(hookGame);
+setImmediate(initHook);

@@ -38,7 +38,10 @@ class MemoryHookThread(QThread):
                 self.status.emit(f"Attached to Process PID: {target_pid}")
                 session = frida.attach(target_pid)
 
-                script_path = os.path.join(os.path.dirname(__file__), "..", "tools", "hook_race.js")
+                # Look for hook_race.js in tools directory relative to package root
+                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                script_path = os.path.join(base_dir, "tools", "hook_race.js")
+                
                 if os.path.exists(script_path):
                     with open(script_path, "r", encoding="utf-8") as f:
                         script_code = f.read()
@@ -73,10 +76,8 @@ class MemoryHookThread(QThread):
             if isinstance(payload, dict):
                 event_type = payload.get('event')
                 if event_type == 'race_data':
-                    # Emits full race setup and runners list
                     self.race.emit(payload.get('data', {}))
                 elif event_type == 'clock_tick':
-                    # Emits live clock updates and active state
                     self.clock.emit(payload.get('data', {}))
                 elif event_type == 'status':
                     self.status.emit(payload.get('message', ''))
