@@ -1,19 +1,21 @@
-import frida
+"""Frida memory hook thread for native Linux Umamusume overlay timing."""
+
 import os
 import time
+import frida
 from PyQt6.QtCore import QThread, pyqtSignal
 
+
 class MemoryHookThread(QThread):
-    race = pyqtSignal(dict)       # Emits parsed race payload/runners
-    clock = pyqtSignal(dict)      # Emits live race clock updates
-    status = pyqtSignal(str)      # Status messages for tray/UI
-    quit_request = pyqtSignal()   # Quit signal if needed
+    race = pyqtSignal(dict, dict)  # Emits (payload, result_map)
+    clock = pyqtSignal(dict)       # Emits live clock ticks
+    status = pyqtSignal(str)       # Tray/UI status messages
+    quit_request = pyqtSignal()
 
     def __init__(self, game_match="umamusume"):
         super().__init__()
         self.game_match = game_match
         self.offset = 0.0
-        self.delay = 0.0
         self._stop = False
 
     def stop(self):
@@ -38,21 +40,20 @@ class MemoryHookThread(QThread):
                 self.status.emit(f"Attached to Process PID: {target_pid}")
                 session = frida.attach(target_pid)
 
-                # Look for hook_race.js in tools directory relative to package root
                 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
                 script_path = os.path.join(base_dir, "tools", "hook_race.js")
-                
+
                 if os.path.exists(script_path):
                     with open(script_path, "r", encoding="utf-8") as f:
                         script_code = f.read()
                 else:
-                    script_code = 'console.log("[Frida] Default attached fallback.");'
+                    script_code = 'console.log("[Frida] hook_race.js not found!");'
 
                 script = session.create_script(script_code)
                 script.on('message', lambda msg, data: self._handle_message(msg))
                 script.load()
 
-                self.status.emit("Memory hooks active - waiting for race...")
+                self.status.emit("Memory hooks active - monitoring race...")
 
                 while not self._stop:
                     time.sleep(0.5)
@@ -76,8 +77,15 @@ class MemoryHookThread(QThread):
             if isinstance(payload, dict):
                 event_type = payload.get('event')
                 if event_type == 'race_data':
-                    self.race.emit(payload.get('data', {}))
+                    # Expecting payload data and result map from JS hook
+                    data = payload.get('data', {})
+                    self.race.emit(data.get('payload', {}), data.get('rmap', {}))
                 elif event_type == 'clock_tick':
-                    self.clock.emit(payload.get('data', {}))
+                    self.clock.emit({
+                        "type": "clock",
+                        "active": payload.get('data', {}).get('active', False),
+                        "time": payload.get('data', {}).get('time', 0.0),
+                        "aiStates": {}
+                    })
                 elif event_type == 'status':
                     self.status.emit(payload.get('message', ''))

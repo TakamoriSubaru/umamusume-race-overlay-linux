@@ -182,15 +182,18 @@ def choose_source(args, settings, cfg):
     if args.demo:
         return "demo", ""
     
-    # Check if memory mode is preferred
+    # Check if memory mode is preferred via settings or args
     pref = (settings or {}).get("source", "")
-    if pref == "memory":
+    if pref == "memory" or getattr(args, "memory", False):
         return "memory", ""
 
     if pref not in ("live", "watch", "memory"):
         pref = "watch" if args.watch is not None else "live"
     if pref == "live":
         return "live", ""
+    elif pref == "memory":
+        return "memory", ""
+        
     folder = os.path.expanduser((settings or {}).get("saved_races_dir", "") or "")
     if not folder and args.watch:
         folder = os.path.expanduser(args.watch)
@@ -222,8 +225,6 @@ class ReplayBase(QThread):
             time.sleep(0.02)
 
     def play(self, payload, rmap, interrupt=None, t0=0.0, preroll=1.0, delay=0.0):
-        """delay = seconds the race really starts AFTER t0 = 0. Until then nothing is sent, so the
-        overlay stays hidden (the game writes the race file when the race loads, not when it starts)."""
         sim = parse_sim(payload["replay"])
         max_t = max((r["finishTimeRaw"] for r in sim["results"]), default=sim["times"][-1])
         self.race.emit(payload, rmap)
@@ -237,7 +238,7 @@ class ReplayBase(QThread):
             if interrupt and ticks % 10 == 0 and interrupt():
                 break
             t = (time.monotonic() - start) * self.speed + t0 + self.offset - delay
-            if t < 0:                      # race has not started yet: show nothing
+            if t < 0:
                 self._sleep(0.1)
                 continue
             if t > max_t + 2:
@@ -250,8 +251,6 @@ class ReplayBase(QThread):
 
 
 class DemoThread(ReplayBase):
-    """--demo: replay one saved race file over and over."""
-
     def __init__(self, path, speed=1.0):
         super().__init__(speed)
         self.path = path
@@ -264,25 +263,21 @@ class DemoThread(ReplayBase):
 
 
 class WatchThread(ReplayBase):
-    """--watch: watch a folder and play the newest race JSON whenever a new one appears.
-    With game_match set, it only works while the game process is running."""
-
     def __init__(self, folder, speed=1.0, ignore_existing=False, game_match="", quit_with_game=False,
                  subfolders=True):
         super().__init__(speed)
         self.folder = folder
-        self.subfolders = subfolders      # also look inside the folders below it (Career, Room match, ...)
+        self.subfolders = subfolders
         self.ignore_existing = ignore_existing
         self.game_match = game_match
         self.quit_with_game = quit_with_game
         self.last_key = None
         self.bad = set()
-        self._ok = {}                     # (file, mtime, size) -> is it a race file?
+        self._ok = {}
         self._last_status = None
         self._changed = False
 
     def set_folder(self, folder, subfolders=True):
-        """Called from the Settings window: switch to another folder while the program runs."""
         self.folder = folder
         self.subfolders = subfolders
         self._changed = True
@@ -293,15 +288,13 @@ class WatchThread(ReplayBase):
             self.status.emit(text)
 
     def _is_race_file(self, fp, st):
-        """True when the .json really is a saved race (other files, like a veterans list, are skipped).
-        The answer is remembered per file version, so each file is only opened once."""
         key = (fp, st.st_mtime, st.st_size)
         if key not in self._ok:
             try:
                 with open(fp, "r", encoding="utf-8") as f:
                     d = json.load(f)
                 self._ok[key] = isinstance(d, dict) and "raceHorse" in d and "simDataBase64" in d
-            except Exception:       # unreadable or still being written: checked again when it changes
+            except Exception:
                 self._ok[key] = False
         return self._ok[key]
 
@@ -325,7 +318,7 @@ class WatchThread(ReplayBase):
                 if (fp, st.st_mtime) in self.bad:
                     continue
                 found.append((st.st_mtime, fp, st))
-        found.sort(key=lambda x: x[0], reverse=True)       # newest first: only these get opened
+        found.sort(key=lambda x: x[0], reverse=True)
         for m, fp, st in found:
             if self._is_race_file(fp, st):
                 return (fp, m, st.st_size)
@@ -343,11 +336,11 @@ class WatchThread(ReplayBase):
         was_running = False
         left_at = None
         while not self._stop:
-            if self._changed:                 # the folder was changed in Settings
+            if self._changed:
                 self._changed = False
                 self.bad.clear()
                 self._ok.clear()
-                self.last_key = self._key(self.newest())   # old files in the new folder are not replayed
+                self.last_key = self._key(self.newest())
                 seen_size = None
                 first = False
             if not self.folder:
@@ -374,7 +367,6 @@ class WatchThread(ReplayBase):
                 left_at = None
                 if not was_running:
                     was_running = True
-                    # files that already exist when the game starts are not replayed
                     self.last_key = self._key(self.newest())
                     first = False
                     self._say(waiting)
@@ -390,7 +382,6 @@ class WatchThread(ReplayBase):
                     self.last_key = key
                     n = None
             if n and key != self.last_key:
-                # wait until the file stops growing (it may still be being written)
                 if seen_size != (key, n[2]):
                     seen_size = (key, n[2])
                     first = startup
@@ -400,7 +391,7 @@ class WatchThread(ReplayBase):
                     payload, rmap = payload_from_saved_race(n[0])
                     parse_sim(payload["replay"])
                 except Exception:
-                    self.bad.add((n[0], n[1]))     # skip this file; the race that is playing is not touched
+                    self.bad.add((n[0], n[1]))
                     self._sleep(0.2)
                     continue
                 self.last_key = key
