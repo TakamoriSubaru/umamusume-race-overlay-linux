@@ -4,7 +4,7 @@
 # memory = native Linux Frida memory hook (starts when the race simulation starts)
 # live   = exact race clock from Race Overlay server
 # watch  = only read horseACT files in WATCH_DIR
-MODE="memory"
+MODE="live"
 
 # Start the original Race Overlay (under Wine): 0 = disabled for native memory hook
 START_RACE_OVERLAY=0

@@ -32,7 +32,7 @@ class SseThread(QThread):
         self.base = base_url.rstrip("/")
         self.game_match = game_match
         self.quit_with_game = quit_with_game
-        self.offset = 0.0  # unused in live mode (the real game clock is used)
+        self.offset = 0.0
         self._stop = False
         self._last_result_raw = ""
 
@@ -109,7 +109,6 @@ class SseThread(QThread):
             return "", None
 
     def _race_worker(self, payload):
-        # The server updates /latest-result slightly after the race event, so retry a few times.
         prev = self._last_result_raw
         rmap = {}
         for i in range(8):
@@ -126,7 +125,6 @@ class SseThread(QThread):
 
 
 def payload_from_saved_race(path):
-    """Build the same data the live server would send, from a horseACT race JSON."""
     with open(path, "r", encoding="utf-8") as f:
         d = json.load(f)
     style_to_course = {"Right": "Right", "Left": "Left"}
@@ -160,7 +158,6 @@ def payload_from_saved_race(path):
 
 
 def count_race_files(folder, subfolders=True):
-    """(number of .json files, number of folders that contain some) - used by the Settings window."""
     files = folders = 0
     if not folder or not os.path.isdir(folder):
         return 0, 0
@@ -177,18 +174,20 @@ def count_race_files(folder, subfolders=True):
 
 
 def choose_source(args, settings, cfg):
-    """Decides where the races come from. Returns (kind, folder/handle) with kind = "demo", "watch", "live", or "memory".
-    The choice made in Settings wins over the start script; an empty choice follows the start script."""
+    """Decides where the races come from. Returns (kind, folder/handle) with kind = "demo", "watch", "live", or "memory"."""
     if args.demo:
         return "demo", ""
     
-    # Check if memory mode is preferred via settings or args
     pref = (settings or {}).get("source", "")
+    if not pref:
+        pref = "memory"  # Default fallback preference to native memory hooking
+
     if pref == "memory" or getattr(args, "memory", False):
         return "memory", ""
 
     if pref not in ("live", "watch", "memory"):
-        pref = "watch" if args.watch is not None else "live"
+        pref = "watch" if args.watch is not None else "memory"
+        
     if pref == "live":
         return "live", ""
     elif pref == "memory":
@@ -203,7 +202,6 @@ def choose_source(args, settings, cfg):
 
 
 class ReplayBase(QThread):
-    """Plays a saved race by faking the same events the live server would send."""
     race = pyqtSignal(dict, dict)
     clock = pyqtSignal(dict)
     status = pyqtSignal(str)
@@ -212,8 +210,8 @@ class ReplayBase(QThread):
     def __init__(self, speed=1.0):
         super().__init__()
         self.speed = speed
-        self.offset = 0.0     # sync nudge in seconds (arrow keys in the window change it)
-        self.delay = 0.0      # saved races only: seconds from "file saved" to "gates open"
+        self.offset = 0.0
+        self.delay = 0.0
         self._stop = False
 
     def stop(self):

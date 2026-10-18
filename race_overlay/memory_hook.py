@@ -7,9 +7,9 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 
 class MemoryHookThread(QThread):
-    race = pyqtSignal(dict, dict)  # Emits (payload, result_map)
-    clock = pyqtSignal(dict)       # Emits live clock ticks
-    status = pyqtSignal(str)       # Tray/UI status messages
+    race = pyqtSignal(dict, dict)
+    clock = pyqtSignal(dict)
+    status = pyqtSignal(str)
     quit_request = pyqtSignal()
 
     def __init__(self, game_match="umamusume"):
@@ -27,18 +27,21 @@ class MemoryHookThread(QThread):
 
         while not self._stop:
             try:
+                device = frida.get_local_device()
                 target_pid = None
-                for p in frida.enumerate_processes():
+                
+                for p in device.enumerate_processes():
                     if self.game_match.lower() in p.name.lower():
                         target_pid = p.pid
                         break
 
                 if not target_pid:
-                    time.sleep(1.5)
+                    self.status.emit(f"Waiting for process matching '{self.game_match}'...")
+                    time.sleep(2.0)
                     continue
 
-                self.status.emit(f"Attached to Process PID: {target_pid}")
-                session = frida.attach(target_pid)
+                self.status.emit(f"Found PID {target_pid}. Attaching...")
+                session = device.attach(target_pid)
 
                 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
                 script_path = os.path.join(base_dir, "tools", "hook_race.js")
@@ -56,20 +59,18 @@ class MemoryHookThread(QThread):
                 self.status.emit("Memory hooks active - monitoring race...")
 
                 while not self._stop:
-                    time.sleep(0.5)
+                    time.sleep(1.0)
 
-            except frida.ProcessNotFoundError:
-                self.status.emit("Game closed. Waiting for launch...")
-                time.sleep(2.0)
             except Exception as e:
-                self.status.emit(f"Hook error: {e}")
-                time.sleep(2.0)
+                self.status.emit(f"Hook waiting: {e}")
+                time.sleep(3.0)
 
             if session:
                 try:
                     session.detach()
                 except Exception:
                     pass
+                session = None
 
     def _handle_message(self, message):
         if message.get('type') == 'send':
@@ -77,7 +78,6 @@ class MemoryHookThread(QThread):
             if isinstance(payload, dict):
                 event_type = payload.get('event')
                 if event_type == 'race_data':
-                    # Expecting payload data and result map from JS hook
                     data = payload.get('data', {})
                     self.race.emit(data.get('payload', {}), data.get('rmap', {}))
                 elif event_type == 'clock_tick':
