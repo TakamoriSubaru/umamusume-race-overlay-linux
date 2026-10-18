@@ -14,3 +14,10 @@ images/
 tools/
 *.AppImage
 *.exe
+
+# The original Race Overlay is someone else's program: never upload it
+Race Overlay/
+Race Overlay*/
+server.exe
+*.pak
+*.dll

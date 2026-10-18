@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Starts the original Race Overlay under Wine once Uma Musume is running.
 # Race Overlay is a separate community program. It is NOT part of this repository.
-# Put its folder (the one that contains "Race Overlay.exe") anywhere under your Documents,
-# Downloads or Desktop folder, or set RACE_OVERLAY_DIR in settings.sh. It is found automatically.
+# Put its folder (the one that contains "Race Overlay.exe") next to the app folder (inside your project
+# folder), or anywhere under your Documents, Downloads or Desktop folder, or set RACE_OVERLAY_DIR in
+# settings.sh. It is found automatically.
 cd "$(dirname "$0")"
 source ./settings.sh
 source ./lib.sh
@@ -10,11 +11,12 @@ source ./lib.sh
 
 # --- find the Race Overlay folder
 FOUND=""
-for d in "${RACE_OVERLAY_DIR:-}" "$WINEPREFIX_DIR/drive_c/Race Overlay" \
+for d in "${RACE_OVERLAY_DIR:-}" "$PWD/../Race Overlay" "$PWD/Race Overlay" \
+         "$WINEPREFIX_DIR/drive_c/Race Overlay" \
          "$HOME/Documents/Race Overlay" "$HOME/Documents"/*/"Race Overlay" \
          "$HOME/Downloads/Race Overlay" "$HOME/Downloads"/*/"Race Overlay" \
          "$HOME/Desktop/Race Overlay" "$HOME/Race Overlay"; do
-  if [ -n "$d" ] && [ -f "$d/Race Overlay.exe" ]; then FOUND="$d"; break; fi
+  if [ -n "$d" ] && [ -f "$d/Race Overlay.exe" ]; then FOUND="$(cd "$d" && pwd)"; break; fi
 done
 if [ -z "$FOUND" ]; then
   say "Race Overlay not found" "Your overlay needs the original Race Overlay program for the exact race times.\n\nPut its folder (the one with 'Race Overlay.exe') into your Documents folder, or write its path after RACE_OVERLAY_DIR= in settings.sh. Then start again.\n\nWithout it the overlay can only use saved races (MODE=\"watch\")."
