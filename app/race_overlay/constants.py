@@ -67,7 +67,7 @@ DEFAULT_SETTINGS = {
     "title_bar": False,        # False = clean window without the title bar
     "show_overlay": False,     # is the overlay window shown? (remembered between starts)
     "open_menu": True,         # open the Menu window when the program starts
-    "update_url": "",          # link to latest.json for "Check online" (optional)
+    "update_url": "https://github.com/TakamoriSubaru/umamusume-race-overlay-linux/releases/latest/download/latest.json",  # "Check online" link
     "pictures": "both",        # "both" = uma image + small player picture, "uma" = uma image only,
                                # "player" = player picture in the big circle (uma image if the player has none)
     "bg": "#090912",

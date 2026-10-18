@@ -9,7 +9,7 @@
 ![Qt](https://img.shields.io/badge/UI-PyQt6-41CD52)
 ![OBS](https://img.shields.io/badge/OBS-Window%20Capture-302E31)
 
-<img src="docs/tower.png" alt="Race tower" width="320">
+<img src=".github/docs/tower.png" alt="Race tower" width="320">
 
 </div>
 
@@ -75,7 +75,7 @@
 
 ## 🚀 Install
 
-1. Download this repository (green **Code** button → **Download ZIP**) and extract it, for example to `~/Documents/race-overlay-native`.
+1. Go to [**Releases**](../../releases/latest), download `race-overlay-native-X.Y.Z.zip` and extract it, for example to `~/Documents/race-overlay-native`. (The files you need are inside that zip. The `app/` folder in this repository holds the same files for developers.)
 2. Open a terminal in that folder and run:
 
    ```bash
@@ -110,7 +110,7 @@ Choose one:
 On start you get a **tray icon** and the **Menu** window. The overlay itself is hidden until you press **Show overlay window** (your choice is remembered).
 
 <div align="center">
-<img src="docs/settings-look.png" alt="Settings, Look tab" width="520">
+<img src=".github/docs/settings-look.png" alt="Settings, Look tab" width="520">
 </div>
 
 ---
@@ -130,7 +130,7 @@ The **results board** is its own window: add a second **Window Capture (Xcomposi
 ## 🖼️ Player pictures and uma faces
 
 <div align="center">
-<img src="docs/settings-players.png" alt="Settings, Players tab" width="520">
+<img src=".github/docs/settings-players.png" alt="Settings, Players tab" width="520">
 </div>
 
 - **Players tab:** every trainer that appears in a race is added automatically. Select one and press **Choose picture...** (a file) or **Paste link...** (a web address).
@@ -156,7 +156,7 @@ The `images/` folder is created next to the program and is not part of this repo
 ## 📂 Saved races folder
 
 <div align="center">
-<img src="docs/settings-races.png" alt="Settings, Races tab" width="520">
+<img src=".github/docs/settings-races.png" alt="Settings, Races tab" width="520">
 </div>
 
 Open the **Menu** and go to the **Races** tab:
@@ -177,7 +177,7 @@ Good to know:
 ## 🙈 Hidden until the race, slide-in
 
 <div align="center">
-<img src="docs/slide-in.png" alt="The tower sliding in from the right" width="760">
+<img src=".github/docs/slide-in.png" alt="The tower sliding in from the right" width="760">
 </div>
 
 - **Before the race there is no overlay.** The window stays hidden. When the race starts it appears (without taking the keyboard focus away from the game) and the tower slides in. After the race it slides out and the window hides again.
@@ -191,7 +191,7 @@ Good to know:
 
 ## 🏁 Results board
 
-<img src="docs/results-board.png" alt="Results board" width="520">
+<img src=".github/docs/results-board.png" alt="Results board" width="520">
 
 When the race ends the tower slides out and the results board slides in. It shows every uma in finishing order, with the finish time and the gap to the winner, and the track name at the bottom. Up to 6 umas are shown in one column, more are split into two columns. The window sizes itself to the number of umas; pull its edges to make it bigger or smaller and the size is remembered.
 
@@ -220,7 +220,7 @@ All in the **Look** tab:
 ## 👗 Alternative outfits
 
 <div align="center">
-<img src="docs/settings-outfits.png" alt="Settings, Outfits tab" width="520">
+<img src=".github/docs/settings-outfits.png" alt="Settings, Outfits tab" width="520">
 </div>
 
 A uma in her normal outfit is shown with just her name. In another outfit the tower shows *Meisho Doto (Halloween)*. The game tells the outfits apart by an id, so the first time one appears it is added to the **Outfits** tab. Type a name there (double-click the *Name* column) and the tower uses it right away. Until it has a name it shows *(Alt)*. The names are saved in `images/outfits.json`.
@@ -269,7 +269,7 @@ Run `./start_overlay.sh --help` for the full list. The most useful:
 Open the **Menu** and use the **Updates** section:
 
 - **Update from file...** choose the downloaded `.zip` of the new version.
-- **Check online** paste the link to a `latest.json` (see `latest.json.example`) and press the button. If a newer version exists, an install button appears.
+- **Check online** press the button. The link to the newest [release](../../releases/latest) is already filled in. If a newer version exists, an install button appears.
 
 Before replacing anything, the old files are copied to `backup/`. Your pictures, player database and settings are never touched, and `settings.sh` is never overwritten.
 
@@ -281,30 +281,31 @@ Before replacing anything, the old files are copied to `backup/`. Your pictures,
 ## 📁 Folder layout
 
 ```
-race_overlay_native.py    start file (kept small, all start scripts use it)
-race_overlay/             the program, one file per part:
-  constants.py              names, version, layout, default settings
-  config.py, util.py        saving settings, small helpers
-  simdata.py                decodes the race replay data
-  sources.py                live server, saved races (watch) and demo
-  databases.py, images.py   players / outfits lists and picture loading
-  overlay_widget.py         the overlay window and the race tower
-  results_board.py          the results board window (after the race)
-  frameless.py              shared by both windows: move / resize, slide side, auto size
-  settings_dialog.py        the Menu / Settings window
-  theme.py, tray.py         look of the settings window, tray icon
-  updater.py                updating with a backup
-  main.py                   command line options and start
-icon.png                  icon
-settings.sh               your paths and mode
-start_auto.sh             start everything
-start_overlay.sh          start the overlay only (sets up Python on first run)
-start_race_overlay.sh     starts Race Overlay under Wine after the game
-launch_with_game.sh       for the Steam launch option
-install_launcher.sh       creates the menu / Desktop icon
-latest.json.example       example for the online updater
-CHANGELOG.md              what changed in each version
-docs/                     screenshots used by this README
+README.md, CHANGELOG.md   this page and what changed in each version
+.github/                  release automation and the screenshots used by this README
+app/                      everything that is in the release zip:
+  race_overlay_native.py    start file (kept small, all start scripts use it)
+  race_overlay/             the program, one file per part:
+    constants.py              names, version, layout, default settings
+    config.py, util.py        saving settings, small helpers
+    simdata.py                decodes the race replay data
+    sources.py                live server, saved races (watch) and demo
+    databases.py, images.py   players / outfits lists and picture loading
+    overlay_widget.py         the overlay window and the race tower
+    results_board.py          the results board window (after the race)
+    frameless.py              shared by both windows: move / resize, slide side, auto size
+    settings_dialog.py        the Menu / Settings window
+    theme.py, tray.py         look of the settings window, tray icon
+    updater.py                updating with a backup
+    main.py                   command line options and start
+  icon.png                  icon
+  settings.sh               your paths and mode
+  start_auto.sh             start everything
+  start_overlay.sh          start the overlay only (sets up Python on first run)
+  start_race_overlay.sh     starts Race Overlay under Wine after the game
+  launch_with_game.sh       for the Steam launch option
+  install_launcher.sh       creates the menu / Desktop icon
+  push_update.sh, release.sh  for the developer (not in the zip)
 images/                   your pictures, players.json and outfits.json (created automatically, not in the repo)
 backup/                   old versions kept by the updater (not in the repo)
 ```
@@ -355,3 +356,12 @@ Planned, not released yet:
 ## ⚖️ Disclaimer
 
 This is an unofficial fan project and is not affiliated with Cygames. It does not touch the game itself. It only displays data provided by the separate Race Overlay tool, which is not included in this repository. Using third-party tools with the game is at your own risk, so check the game's terms yourself. Uma Musume: Pretty Derby and its characters belong to their respective owners.
+
+---
+
+## 🛠️ For the developer: publishing a new version
+
+1. Change the code in `app/`, and add a `## X.Y.Z` section at the top of `CHANGELOG.md`.
+2. Run `./app/release.sh X.Y.Z`.
+
+That commits, tags `vX.Y.Z` and pushes. GitHub then builds `race-overlay-native-X.Y.Z.zip` and `latest.json` and publishes them as a new Release, with the changelog text as the release notes. The online updater in the program reads that `latest.json`.

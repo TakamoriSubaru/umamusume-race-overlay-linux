@@ -1,0 +1,54 @@
+name: Release
+
+# Runs when you push a tag like v1.4.1 (the release.sh script does this for you).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check that the tag matches the program version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          FILE_VER="$(sed -nE 's/^APP_VERSION = "([^"]+)".*/\1/p' app/race_overlay/constants.py)"
+          echo "tag=$TAG, APP_VERSION=$FILE_VER"
+          [ "$TAG" = "$FILE_VER" ] || { echo "Tag and APP_VERSION differ"; exit 1; }
+
+      - name: Build the zip, the release notes and latest.json
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          NAME="race-overlay-native-$VER"
+          mkdir -p "dist/$NAME"
+          cp -a app/. "dist/$NAME/"
+          rm -rf "dist/$NAME/backup" "dist/$NAME/images" "dist/$NAME/push_update.sh" "dist/$NAME/release.sh"
+          find "dist/$NAME" -name '__pycache__' -type d -prune -exec rm -rf {} +
+          cp README.md CHANGELOG.md "dist/$NAME/"
+          (cd dist && zip -qr "$NAME.zip" "$NAME")
+          # release notes = the "## $VER" section of CHANGELOG.md
+          awk -v v="$VER" '$0=="## " v {f=1; next} /^## / {f=0} f' CHANGELOG.md > notes.md
+          python3 - "$VER" "$NAME" <<'PY'
+          import json, os, sys
+          ver, name = sys.argv[1], sys.argv[2]
+          notes = open("notes.md", encoding="utf-8").read().strip()
+          repo = os.environ["GITHUB_REPOSITORY"]
+          json.dump({"version": ver, "notes": notes,
+                     "zip": "https://github.com/%s/releases/download/v%s/%s.zip" % (repo, ver, name)},
+                    open("dist/latest.json", "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+          PY
+          test -s notes.md || echo "See CHANGELOG.md" > notes.md
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/race-overlay-native-$VER.zip" dist/latest.json \
+            --title "Version $VER" --notes-file notes.md
