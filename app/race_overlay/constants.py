@@ -10,7 +10,7 @@ APP_NAME = "Umamusume Race Overlay (Linux)"
 RESULTS_NAME = "Umamusume Race Results (Linux)"   # window name of the results board (pick it in OBS)
 
 
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.5.1"
 
 
 SLIDE_SECONDS = 0.45       # how long the tower takes to slide in / out
