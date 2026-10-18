@@ -35,6 +35,27 @@ fi
 # --- wait for the game, then start it
 while ! pgrep -if "$GAME_MATCH" > /dev/null; do sleep 2; done
 sleep "$RACE_OVERLAY_DELAY"
-pgrep -if "Race Overlay.exe" > /dev/null && exit 0     # already running
-WINEPREFIX="$WINEPREFIX_DIR" WINEFSYNC=1 "$WINE_BIN" "C:\\Race Overlay\\Race Overlay.exe" \
-  --no-sandbox --disable-gpu-sandbox > /tmp/race-overlay-wine.log 2>&1 &
+
+# What to start (RACE_OVERLAY_START in settings.sh):
+#   server = only Race Overlay's server (server.exe). This is what your overlay needs. (default)
+#   app    = the whole Race Overlay program (it starts its own server)
+#   both   = first the server, then the program
+START="${RACE_OVERLAY_START:-server}"
+PORT=5315
+
+server_up() { (exec 3<>/dev/tcp/127.0.0.1/$PORT) 2>/dev/null; }
+
+if [ "$START" = "server" ] || [ "$START" = "both" ]; then
+  if ! server_up; then
+    ( cd "$FOUND/resources" && WINEPREFIX="$WINEPREFIX_DIR" WINEFSYNC=1 "$WINE_BIN" server.exe \
+        > /tmp/race-overlay-server.log 2>&1 & )
+    for _ in $(seq 1 "${RACE_OVERLAY_SERVER_WAIT:-25}"); do server_up && break; sleep 1; done
+    server_up || say "Race Overlay server" "The Race Overlay server did not start.\n\nLog: /tmp/race-overlay-server.log"
+  fi
+fi
+
+if [ "$START" = "app" ] || [ "$START" = "both" ]; then
+  pgrep -if "Race Overlay.exe" > /dev/null && exit 0     # already running
+  WINEPREFIX="$WINEPREFIX_DIR" WINEFSYNC=1 "$WINE_BIN" "C:\\Race Overlay\\Race Overlay.exe" \
+    --no-sandbox --disable-gpu-sandbox > /tmp/race-overlay-wine.log 2>&1 &
+fi

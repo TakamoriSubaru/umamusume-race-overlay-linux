@@ -35,3 +35,9 @@ WATCH_DIR="${WATCH_DIR:-$HOME/Documents/Saved races}"
 # Where the original Race Overlay program is (the folder with "Race Overlay.exe").
 # Leave empty: it is looked for in your Documents, Downloads and Desktop folders.
 RACE_OVERLAY_DIR="${RACE_OVERLAY_DIR:-}"
+
+# What to start from Race Overlay when the game starts:
+#   server = only its server (server.exe), no Race Overlay window (default, recommended)
+#   app    = the whole Race Overlay program
+#   both   = the server first, then the program
+RACE_OVERLAY_START="${RACE_OVERLAY_START:-server}"

@@ -69,7 +69,7 @@
 - Linux with an **X11** session (Linux Mint Cinnamon is X11 by default) and **OBS**
 - Python 3.9 or newer (`python3`, `python3-venv`)
 - Uma Musume running through Steam/Proton
-- The original **Race Overlay** (a separate community tool, **not included** here). It reads the race data from the game, and this program displays it. Put its folder (the one with `Race Overlay.exe`) anywhere in your Documents, Downloads or Desktop folder, and the start script finds it and connects it to the game's Wine prefix for you. If it is somewhere else, write the path after `RACE_OVERLAY_DIR=` in `settings.sh`.
+- The original **Race Overlay** (a separate community tool, **not included** here). It reads the race data from the game, and this program displays it. Put its folder (the one with `Race Overlay.exe`) anywhere in your Documents, Downloads or Desktop folder, and the start script finds it and connects it to the game's Wine prefix for you. If it is somewhere else, write the path after `RACE_OVERLAY_DIR=` in `settings.sh`. By default only its server (`server.exe`) is started, in the background. `RACE_OVERLAY_START` in `settings.sh` can also start the whole program (`app` or `both`).
 
 ---
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.2
+
+- **New:** the start script now starts Race Overlay's **server** (`server.exe`) by itself when the game starts, so you no longer run it by hand. The server log is `/tmp/race-overlay-server.log`, and a popup tells you if it did not start. Your overlay only needs this server, so the Race Overlay window is not opened any more.
+- **New:** `RACE_OVERLAY_START` in `settings.sh`: `server` (default), `app` (the whole Race Overlay program) or `both`.
+
 ## 1.5.1
 
 - **New:** no terminal needed. **Install icon (double-click)** adds the menu / Desktop icon. Problems (and the first-time setup) are shown in a popup window, and the log is written to `/tmp/race-overlay-native.log`.
