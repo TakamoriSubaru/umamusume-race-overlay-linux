@@ -26,3 +26,4 @@ venv/
 __pycache__/
 *.so
 tools/*.exe
+tools/*.AppImage
