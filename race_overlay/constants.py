@@ -2,35 +2,65 @@
 
 import os
 
+
+
 APP_NAME = "Umamusume Race Overlay (Linux)"
+
+
 RESULTS_NAME = "Umamusume Race Results (Linux)"   # window name of the results board (pick it in OBS)
+
+
 APP_VERSION = "1.4.0"
 
+
 SLIDE_SECONDS = 0.45       # how long the tower takes to slide in / out
+
+
 BASE_W = 310
+
+
 ROW_H = 48
+
+
 HEADER_H = 66
+
+
 FOOT_PAD = 8
 
+
 STYLE_COLOR = {1: "#5ca1e5", 2: "#a6db24", 3: "#ffdf31", 4: "#ffb538"}
+
+
 STYLE_LABEL = {1: "F", 2: "P", 3: "L", 4: "E"}
+
 
 WAKU_COLORS = ["#ffffff", "#453b33", "#f86a6a", "#5ea2e9",
                "#ffdd33", "#74d27c", "#ffb432", "#f381a2"]
+
+
 WAKU_DARK = {0, 4}
+
+
 PODIUM = ["#d4a017", "#a8a8b8", "#b87040"]
 
+
 CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "race-overlay-native")
+
+
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+
 
 PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPT_DIR = os.path.dirname(PACKAGE_DIR)   # the program folder (next to race_overlay_native.py)
 
+
 IMG_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif")
+
 
 TRACK_NAMES = {10001: "Sapporo", 10002: "Hakodate", 10003: "Niigata", 10004: "Fukushima",
                10005: "Nakayama", 10006: "Tokyo", 10007: "Chukyo", 10008: "Kyoto",
                10009: "Hanshin", 10010: "Kokura"}
+
 
 DEFAULT_SETTINGS = {
     "on_top": True,            # keep the overlay above other windows
@@ -50,6 +80,7 @@ DEFAULT_SETTINGS = {
     "source": "",              # "" = follow the start script, "live" = Race Overlay server, "watch" = saved races folder
     "saved_races_dir": "",     # folder with your saved race JSON files (empty = the one from settings.sh / --watch)
     "watch_subfolders": True,  # also look inside the folders below it (Career, Room match, ...)
+    "start_delay": 12.0,       # saved races: seconds from "race file saved" to "gates open"
     # --- when the overlay shows
     "auto_hide": True,         # window is hidden until a race starts, hidden again after it
     "slide": "auto",           # slide in from: "auto" (the side the window is on), "left", "right", "off"
@@ -62,8 +93,10 @@ DEFAULT_SETTINGS = {
     "results_seconds": 10.0,   # how long it stays (0 = until the next race starts)
 }
 
-KEEP_ON_RESET = ("source", "saved_races_dir", "watch_subfolders", "auto_hide",
+
+KEEP_ON_RESET = ("source", "saved_races_dir", "watch_subfolders", "start_delay", "auto_hide",
                  "update_url", "open_menu", "show_overlay", "results_board", "results_seconds")
+
 
 # Colour sets for the Look tab. Each one only changes colours.
 THEME_PRESETS = {
@@ -75,7 +108,9 @@ THEME_PRESETS = {
     "High contrast":            {"bg": "#000000", "text_color": "#ffffff", "sub_color": "#d0d0d0", "accent": "#ffff00"},
 }
 
+
 ARROW_SECONDS = 2.5        # how long a position-change arrow stays
 ARROW_AFTER = 3.0          # race seconds before arrows start (the gates opening shuffles everyone)
+
 
 STATE_COLORS = {"green": "#2ecc71", "yellow": "#f1c40f", "red": "#e74c3c"}

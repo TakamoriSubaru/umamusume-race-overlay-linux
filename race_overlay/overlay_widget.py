@@ -160,6 +160,7 @@ class OverlayWidget(FramelessMixin, QWidget):
     def logical_w(self):
         return BASE_W
 
+    # ----- source wiring ------------------------------------------------------
     def attach(self, source):
         self.source = source
         source.race.connect(self.on_race)
@@ -167,6 +168,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         source.status.connect(self.on_status)
         source.quit_request.connect(self.quit_app)
         source.offset = float(self.cfg.get("sync_offset", 0.0))
+        source.delay = float(self.s.get("start_delay", 12.0))
         source.start()
 
     def on_status(self, text):
@@ -181,6 +183,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.refresh_tray()
         self.update()
 
+    # ----- images --------------------------------------------------------------
     def want_img(self, key, spec):
         if key and key not in self.pix and key not in self.pix_pending:
             self.pix_pending.add(key)
@@ -192,18 +195,21 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.update()
 
     def uma_pixmap(self, h):
+        """The picture of the UMA (always the same for the same uma / outfit)."""
         for k in (h.ukey, h.bkey):
             if k and self.pix.get(k):
                 return self.pix[k]
         return None
 
     def player_pixmap(self, h):
+        """The picture of the PLAYER (follows the trainer, whatever uma they run)."""
         return self.pix.get(h.pkey) if h.pkey else None
 
     def picture_mode(self):
         m = self.s.get("pictures", "both")
         return m if m in ("both", "uma", "player") else "both"
 
+    # ----- race events ---------------------------------------------------------
     def on_race(self, payload, rmap):
         self.preview = False
         self.hide_deadline = None
@@ -220,16 +226,16 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.result_map = rmap
 
         self.board_done = False
-        self.board.dismiss()
+        self.board.dismiss()                 # the results of the last race go away
         self.horses = self.build_horses(payload, rmap)
 
-        if collect:
+        if collect:   # remember every trainer we see, so you can give them a picture
             for h in self.horses:
                 if h.trainer:
                     self.players.touch(h.trainer, h.name)
             self.players.save()
             new_outfit = False
-            for h in self.horses:
+            for h in self.horses:         # ... and every alternative outfit, so you can name it
                 new_outfit |= self.outfits.touch(h.chara_id, h.dress_id, h.name)
             if new_outfit:
                 self.outfits.save()
@@ -246,6 +252,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.update()
 
     def build_horses(self, payload, rmap):
+        """One Horse per runner, with the picture keys set and the pictures requested."""
         by_chara = {h.get("chara_id"): h for h in rmap.values() if h.get("chara_id")}
         horses = []
         for i, r in enumerate(payload.get("runners") or []):
@@ -268,12 +275,15 @@ class OverlayWidget(FramelessMixin, QWidget):
             horses.append(h)
         return horses
 
+    # ----- auto size: the window follows the number of umas ----------------------------
     def visible_rows(self):
         n = len(self.horses)
         m = int(self.s.get("max_rows", 0) or 0)
         return min(n, m) if m > 0 else n
 
     def fit_to_rows(self):
+        """Make the window exactly as tall as the umas that are shown. When that is taller than the
+        screen, the whole tower is scaled down to fit (and goes back to your size for a smaller field)."""
         if self.args.no_autosize or not self.horses:
             return
         fit_window(self, BASE_W, HEADER_H + self.visible_rows() * ROW_H + FOOT_PAD, self.pref_scale)
@@ -281,17 +291,9 @@ class OverlayWidget(FramelessMixin, QWidget):
     def on_clock(self, p):
         now = time.monotonic()
         if p.get("active") and self.frames:
-            t = float(p.get("time", 0))
-            
-            # Strict guard against pre-race lineup/loading screens (t must be > 0.1)
-            if t <= 0.1:
-                self.clock_active = False
-                self.racing = False
-                return
-
             if not self.racing:
                 self.racing = True
-            
+            t = float(p.get("time", 0))
             self.clock_paused = self.prev_clock >= 0 and abs(t - self.prev_clock) < 0.02
             self.prev_clock = t
             self.clock_active = True
@@ -309,6 +311,7 @@ class OverlayWidget(FramelessMixin, QWidget):
                 if not self.args.hold:
                     self.hide_deadline = now + self.args.hide_after
 
+    # ----- the per-frame tick --------------------------------------------------
     def tick(self):
         now = time.monotonic()
         dt = now - self._last_tick
@@ -326,12 +329,12 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.racing = False
             self.hide_deadline = None
 
-        # Require racing, active clock, and horses to show window
-        want = 1.0 if (self.racing and self.clock_active and self.horses) else 0.0
+        want = 1.0 if (self.racing and self.horses) else 0.0
         self.panel_alpha += (want - self.panel_alpha) * min(1.0, dt * 8)
         if abs(want - self.panel_alpha) < 0.01:
             self.panel_alpha = want
 
+        # slide in while a race runs, slide out afterwards; the window itself only shows during a race
         if want and self.auto_hide_active() and not self.isVisible():
             self.reveal()
         step = dt / SLIDE_SECONDS
@@ -352,6 +355,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.board.tick(now, dt)
         self.update()
 
+    # ----- tower maths (port of renderTime) ------------------------------------
     def interpolate(self, t):
         if not self.frames:
             return None
@@ -464,28 +468,36 @@ class OverlayWidget(FramelessMixin, QWidget):
             parts.append(grade)
         return "  ·  ".join(parts)
 
+    # ----- painting ------------------------------------------------------------
     def fnt(self, px, bold=False, mono=False):
+        """A font that follows the Settings window (family + size %)."""
         fam = self.s.get("font") or ("Monospace" if mono else "")
         f = QFont(fam) if fam else QFont()
         f.setPixelSize(max(6, int(round(px * float(self.s.get("text_scale", 1.0))))))
         f.setBold(bold)
         return f
 
+    # ----- when the window shows, and the slide ------------------------------------
     def auto_hide_active(self):
+        """True when the window should only be visible while a race runs.
+        Not possible without a tray icon (you could not get it back), and --show keeps it always visible."""
         return bool(self.s.get("auto_hide", True) and self.tray_active and not self.args.show
                     and not self.args.no_tray)
 
     def window_wanted(self):
+        """What the 'Show / Hide overlay window' button means right now."""
         if self.auto_hide_active():
             return self.pinned
         return self.isVisible()
 
     def reveal(self):
+        """Show the window for a race without taking the keyboard focus away from the game."""
         self.slide = 0.0
         self.show()
         self.raise_()
 
     def sync_window_visibility(self):
+        """Called when 'hide the window when no race runs' is switched on or off."""
         if self.auto_hide_active():
             if self.isVisible() and not self.pinned and not self.racing:
                 self.hide()
@@ -494,6 +506,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.refresh_tray()
 
     def slide_dir(self):
+        """-1 = the tower comes in from the left, +1 = from the right, 0 = no sliding (fade only)."""
         return self.side_for(self.s.get("slide", "auto"))
 
     def paintEvent(self, _ev):
@@ -529,7 +542,7 @@ class OverlayWidget(FramelessMixin, QWidget):
 
         d = self.slide_dir()
         if d:
-            e = 1.0 - (1.0 - max(0.0, min(1.0, self.slide))) ** 3
+            e = 1.0 - (1.0 - max(0.0, min(1.0, self.slide))) ** 3      # ease out
             p.translate(d * (1.0 - e) * lw, 0)
         p.setOpacity(self.panel_alpha)
         rows = self.visible_rows()
@@ -541,6 +554,7 @@ class OverlayWidget(FramelessMixin, QWidget):
 
         self.draw_header(p, lw)
         p.save()
+        # only the rows that are shown: a uma that drops out of the top N slides out under the clip edge
         p.setClipRect(QRectF(0, HEADER_H, lw, max(0.0, min(lh - HEADER_H, rows * ROW_H))))
         for h in self.horses:
             self.draw_row(p, h, lw, rows)
@@ -549,6 +563,7 @@ class OverlayWidget(FramelessMixin, QWidget):
 
     @staticmethod
     def course_lines(info):
+        """('Tokyo · Turf · Mile 1600m', 'Left · Good · Sunny · Spring') from the race's courseInfo."""
         info = info or {}
         dist = " ".join([x for x in (info.get("distType"), ("%sm" % info["distance"]) if info.get("distance") else "") if x])
         line1 = " · ".join([x for x in (info.get("trackName"), info.get("surface"), dist) if x]) or "Race"
@@ -559,7 +574,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         tc, sc = QColor(self.s["text_color"]), QColor(self.s["sub_color"])
         line1, line2 = self.course_lines(self.course_info)
 
-        cw = int(lw - 115)
+        cw = int(lw - 115)   # room left of the clock
         f1, f2 = self.fnt(12, True), self.fnt(10)
         p.setFont(f1); p.setPen(tc)
         p.drawText(QRectF(10, 7, cw, 16), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
@@ -577,6 +592,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         p.drawLine(QPointF(0, HEADER_H - 1), QPointF(lw, HEADER_H - 1))
 
     def draw_circle_picture(self, p, rect, pm, letter, color):
+        """A round picture (cropped to a square first). Without a picture: a dark circle with a letter."""
         circ = QPainterPath()
         circ.addEllipse(rect)
         p.save()
@@ -592,11 +608,14 @@ class OverlayWidget(FramelessMixin, QWidget):
         p.restore()
 
     def draw_pictures(self, p, h, rect, tc):
+        """The round picture(s) of one uma: the uma, the player, or the uma with a small player badge.
+        `rect` is the square for the big picture."""
         mode = self.picture_mode()
         upm, ppm = self.uma_pixmap(h), self.player_pixmap(h)
         big = (ppm or upm) if mode == "player" else upm
+        # the circle is always dark, so the fallback letter is always white (not the text colour)
         self.draw_circle_picture(p, rect, big, (h.name[:1] or "?"), QColor("#ffffff"))
-        if mode == "both" and ppm:
+        if mode == "both" and ppm:      # small player picture on the corner of the uma picture
             bs = rect.width() / 2.0
             badge = QRectF(rect.right() - bs + 2, rect.bottom() - bs + 3, bs, bs)
             ring = QColor(self.s["bg"])
@@ -606,6 +625,7 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.draw_circle_picture(p, badge, ppm, "", tc)
 
     def draw_rank_arrow(self, p, h, y):
+        """A small green up / red down triangle above / below the rank number; it fades out."""
         if not h.move_dir or not self.s.get("rank_arrows", True):
             return
         age = time.monotonic() - h.move_at
@@ -633,19 +653,23 @@ class OverlayWidget(FramelessMixin, QWidget):
         limit = HEADER_H + (rows if rows is not None else len(self.horses)) * ROW_H
         if y >= limit or y > self.height() / (self.width() / BASE_W) + ROW_H:
             return
+        # podium underline
         if h.rank < 3:
             c = QColor(PODIUM[h.rank]); c.setAlpha(110)
             p.setPen(QPen(c, 1))
             p.drawLine(QPointF(0, y + ROW_H - 1), QPointF(lw, y + ROW_H - 1))
 
+        # rank
         p.setFont(self.fnt(17, True))
         p.setPen(QColor(PODIUM[h.rank]) if h.rank < 3 else tc)
         p.drawText(QRectF(2, y, 26, ROW_H), Qt.AlignmentFlag.AlignCenter, str(h.rank + 1))
         self.draw_rank_arrow(p, h, y)
 
+        # pictures: the uma and the player are two separate pictures
         ax, ay, asz = 30, y + 7, 34
         self.draw_pictures(p, h, QRectF(ax, ay, asz, asz), tc)
 
+        # gate badge
         gi = max(0, min(7, (h.gate or 1) - 1))
         gx, gy, gs = 69, y + 16, 16
         gp = QPainterPath(); gp.addRoundedRect(QRectF(gx, gy, gs, gs), 4, 4)
@@ -655,6 +679,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         p.setPen(QColor("#794016") if gi in WAKU_DARK else QColor("#ffffff"))
         p.drawText(QRectF(gx, gy, gs, gs), Qt.AlignmentFlag.AlignCenter, str(h.id))
 
+        # style badge + trainer + uma name
         nx = 91
         bp = QPainterPath(); bp.addRoundedRect(QRectF(nx, y + 9, 14, 14), 3, 3)
         p.fillPath(bp, QColor(STYLE_COLOR.get(h.style, "#383858")))
@@ -667,6 +692,8 @@ class OverlayWidget(FramelessMixin, QWidget):
         p.setFont(tf); p.setPen(tc)
         p.drawText(QRectF(nx + 18, y + 8, name_w, 16), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                    QFontMetrics(tf).elidedText(h.trainer, Qt.TextElideMode.ElideRight, name_w))
+        # uma name: "Meisho Doto", or "Meisho Doto (Halloween)" for an alternative outfit.
+        # A long name is made a little smaller first, and only cut off when it still does not fit.
         full_w = name_w + 18
         nf = self.fnt(10)
         for px in (9.0, 8.0):
@@ -677,6 +704,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         p.drawText(QRectF(nx, y + 25, full_w, 14), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                    QFontMetrics(nf).elidedText(h.label, Qt.TextElideMode.ElideRight, full_w))
 
+        # gap
         l1, l2 = h.gap_lines
         if h.gap_kind == "lead":
             p.setFont(self.fnt(11, True)); p.setPen(QColor("#d4a017"))
@@ -690,10 +718,11 @@ class OverlayWidget(FramelessMixin, QWidget):
             p.setFont(self.fnt(10)); p.setPen(sc)
             p.drawText(QRectF(lw - 120, y + 25, 114, 14), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, l2)
 
+    # ----- tray icon, show/hide, quit ------------------------------------------
     def set_overlay_visible(self, on):
         on = bool(on)
         if self.auto_hide_active():
-            self.pinned = on
+            self.pinned = on         # placing the window: not remembered, next start it is hidden again
         else:
             self.s["show_overlay"] = on
             self.save_settings()
@@ -701,7 +730,7 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.show()
             self.raise_()
         elif not (self.auto_hide_active() and self.racing):
-            self.hide()
+            self.hide()              # during a race it goes away by itself when the race is over
         self.refresh_tray()
 
     def setup_tray(self, force=False):
@@ -810,6 +839,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.close()
         QApplication.instance().quit()
 
+    # ----- settings helpers ----------------------------------------------------
     def save_settings(self):
         self.cfg["settings"] = dict(self.s)
         save_config(self.cfg)
@@ -818,6 +848,7 @@ class OverlayWidget(FramelessMixin, QWidget):
                        ("player", "Player picture (uma image if none)"))
 
     def add_pictures_menu(self, menu):
+        """A 'Pictures' submenu with three exclusive choices. Returns {mode: action}."""
         from PyQt6.QtGui import QActionGroup
         sub = menu.addMenu("Pictures")
         group = QActionGroup(sub)
@@ -844,12 +875,15 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.board.apply_flags()
         if key == "max_rows":
             self.fit_to_rows()
+        if key == "start_delay" and getattr(self, "source", None) is not None:
+            self.source.delay = float(value)
         if key == "auto_hide":
             self.sync_window_visibility()
         self.board.update()
         self.update()
 
     def apply_theme(self, name):
+        """Apply one of the colour sets from THEME_PRESETS."""
         preset = THEME_PRESETS.get(name)
         if not preset:
             return
@@ -865,10 +899,12 @@ class OverlayWidget(FramelessMixin, QWidget):
         frameless = bool(self.args.frameless or self.args.transparent or not self.s.get("title_bar", False))
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint, frameless)
         if was_visible:
-            self.show()
+            self.show()  # changing window flags hides the window, so show it again
         self.setGeometry(geo)
 
     def apply_source_choice(self):
+        """Use the source / saved-races folder chosen in Settings.
+        Returns True when it is active now, False when the program has to restart first."""
         kind, folder = choose_source(self.args, self.s, self.cfg)
         if kind == "watch" and self.source_kind == "watch" and isinstance(self.source, WatchThread):
             self.source.set_folder(folder, bool(self.s.get("watch_subfolders", True)))
@@ -879,9 +915,9 @@ class OverlayWidget(FramelessMixin, QWidget):
         return kind == self.source_kind
 
     def reset_settings(self):
-        keep = {k: self.s.get(k, DEFAULT_SETTINGS[k]) for k in KEEP_ON_RESET}
+        keep ={k: self.s.get(k, DEFAULT_SETTINGS[k]) for k in KEEP_ON_RESET}
         self.s = dict(DEFAULT_SETTINGS)
-        self.s.update(keep)
+        self.s.update(keep)          # only the look is reset, not your folder / source / update link
         self.save_settings()
         self.apply_flags()
         self.board.apply_flags()
@@ -897,6 +933,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.dialog.raise_()
         self.dialog.activateWindow()
 
+    # ----- player pictures -----------------------------------------------------
     def refresh_player_images(self):
         for k in [k for k in self.pix if k.startswith("p:")]:
             self.pix.pop(k, None)
@@ -910,7 +947,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         import shutil
         safe = "".join(c if c not in '/\\:*?"<>|' else "_" for c in trainer).strip() or "player"
         ext = os.path.splitext(src_path)[1].lower() or ".png"
-        for old in os.listdir(self.thumbs.players):
+        for old in os.listdir(self.thumbs.players):      # drop an older picture with another extension
             b, e = os.path.splitext(old)
             if b.lower() == safe.lower() and e.lower() in IMG_EXTS:
                 try:
@@ -930,7 +967,9 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.players.set_image(trainer, "")
         self.refresh_player_images()
 
+    # ----- preview -------------------------------------------------------------
     def build_preview_race(self):
+        """A made-up 8 uma race. Returns (sim, payload, rmap, finish_times)."""
         import math
         import random
         rnd = random.Random(7)
@@ -968,7 +1007,7 @@ class OverlayWidget(FramelessMixin, QWidget):
                 self.update()
             return
         if self.clock_active or (self.racing and not self.preview):
-            return
+            return  # a real race is running - do not disturb it
         sim, payload, rmap, fins = self.build_preview_race()
         self.hide_deadline = None
         self.setup_race(sim, payload, rmap)
@@ -977,23 +1016,27 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.preview_len = max(fins) + 4.0
         self.racing = True
 
+    # ----- results board ---------------------------------------------------------------
     def on_race_finished(self):
+        """The race is over and every uma has its final place: queue the results board."""
         if self.board_done or not self.horses:
             return
         self.board_done = True
         if not self.s.get("results_board", True):
             return
+        # it comes in as the tower goes out, so the two are never both full-size at the same time
         delay = 1.0 if self.args.hold else max(0.5, float(self.args.hide_after))
         line1, _line2 = self.course_lines(self.course_info)
         self.board.present(self.results_entries(), line1, delay)
 
     def results_entries(self):
+        """Final placings, best first: place (ties share one), finish time and the gap to the winner."""
         out, win_t, prev_t, place = [], None, None, 0
         for i, h in enumerate(sorted(self.horses, key=lambda x: x.rank)):
             res = self.results[h.frame_idx] if h.frame_idx < len(self.results) else None
             t = float(res["finishTimeRaw"]) if res and res["finishTimeRaw"] > 0 else 0.0
             if t > 0 and prev_t is not None and abs(t - prev_t) < 0.0005:
-                pass
+                pass                                   # a tie: same place as the uma before
             else:
                 place = i + 1
             if t > 0:
@@ -1007,6 +1050,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         return out
 
     def sample_results(self):
+        """Made-up placings, to place and style the board before any race has been run."""
         sim, payload, rmap, fins = self.build_preview_race()
         horses = self.build_horses(payload, rmap)
         order = sorted(range(len(horses)), key=lambda i: fins[i])
@@ -1017,9 +1061,11 @@ class OverlayWidget(FramelessMixin, QWidget):
         return out, self.course_lines(payload["courseInfo"])[0]
 
     def set_board_pinned(self, on):
+        """'Show results board': keep it on screen to place it. Shows sample placings if no race ran yet."""
         self.board.set_pinned(on, self.sample_results() if on and not self.board.entries else None)
         self.refresh_tray()
 
+    # ----- menu / keyboard --------------------------------------------------------------
     def contextMenuEvent(self, ev):
         m = QMenu(self)
         m.addAction("Settings...", self.open_settings)
@@ -1053,9 +1099,11 @@ class OverlayWidget(FramelessMixin, QWidget):
                 self.quit_app()
         elif k == Qt.Key.Key_S:
             self.open_settings()
-        elif k == Qt.Key.Key_T:
+        elif k == Qt.Key.Key_T:   # quick switch: both -> uma only -> player picture
             self.cycle_pictures()
         elif k in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down):
+            # watch/demo mode only. Right/Up = race runs ahead, Left/Down = later.
+            # Left/Right = 0.25 s per press, Up/Down = 1 s per press
             step = {Qt.Key.Key_Right: 0.25, Qt.Key.Key_Left: -0.25,
                     Qt.Key.Key_Up: 1.0, Qt.Key.Key_Down: -1.0}[k]
             src = getattr(self, "source", None)
@@ -1067,7 +1115,7 @@ class OverlayWidget(FramelessMixin, QWidget):
 
     def closeEvent(self, ev):
         if self.tray_active and not self.quitting:
-            self.set_overlay_visible(False)
+            self.set_overlay_visible(False)      # closing the window only hides it
             ev.ignore()
             return
         if not self.quitting:

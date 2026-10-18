@@ -11,7 +11,6 @@ from .config import load_config, save_config
 from .constants import APP_NAME, APP_VERSION, SCRIPT_DIR
 from .overlay_widget import OverlayWidget
 from .sources import DemoThread, SseThread, WatchThread, choose_source
-from .memory_hook import MemoryHookThread
 
 
 def prefer_xwayland(args):
@@ -88,8 +87,6 @@ def main():
                           subfolders=bool(w.s.get("watch_subfolders", True)))
     elif kind == "demo":
         src = DemoThread(args.demo, args.demo_speed)
-    elif kind == "memory":
-        src = MemoryHookThread(args.game_match)
     else:
         src = SseThread(args.server, args.game_match if args.game_linked else "", args.quit_with_game)
     w.source_kind = kind
