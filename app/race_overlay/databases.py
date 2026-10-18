@@ -76,6 +76,58 @@ class PlayersDB:
         return sorted(self.data.items(), key=lambda kv: kv[1].get("last_seen", ""), reverse=True)
 
 
+class UmasDB:
+    """images/umas.json - every uma (by card id) seen in a race, so you can give her your own picture."""
+
+    def __init__(self, path):
+        self.path = path
+        self.data = {}          # "100101" -> {"name": "...", "chara_id": 1001, "seen": 3}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            if isinstance(d, dict):
+                self.data = {str(k): v for k, v in d.items() if isinstance(v, dict)}
+        except Exception:
+            self.data = {}
+
+    def save(self):
+        try:
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
+            tmp = self.path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self.data, f, indent=2, ensure_ascii=False)
+            os.replace(tmp, self.path)
+        except Exception as e:
+            print("could not save umas.json:", e)
+
+    def touch(self, card_id, chara_id, name):
+        """Remember a uma. True if she is new."""
+        if not card_id:
+            return False
+        key = str(int(card_id))
+        new = key not in self.data
+        e = self.data.setdefault(key, {"name": name, "chara_id": int(chara_id or 0), "seen": 0})
+        e["name"] = name or e.get("name", "")
+        e["chara_id"] = int(chara_id or e.get("chara_id", 0) or 0)
+        e["seen"] = int(e.get("seen", 0)) + 1
+        return new
+
+    def add(self, card_id, name):
+        self.touch(card_id, int(card_id) // 100, name)
+        self.data[str(int(card_id))]["seen"] = 0
+        self.save()
+
+    def rows(self):
+        """[(card_id, chara_id, name, seen)] sorted by name."""
+        out = []
+        for k, v in self.data.items():
+            try:
+                out.append((int(k), int(v.get("chara_id", 0) or 0), v.get("name", ""), int(v.get("seen", 0))))
+            except ValueError:
+                continue
+        return sorted(out, key=lambda r: (r[2].lower(), r[0]))
+
+
 # Names of alternative outfits, by race dress id. The default outfit of a uma has the dress id
 # chara id * 100 + 1 (for example 100201 = Silence Suzuka) and is shown with just her name.
 # Everything else is an alternative outfit: shown as "Name (Outfit)". You can name more of them

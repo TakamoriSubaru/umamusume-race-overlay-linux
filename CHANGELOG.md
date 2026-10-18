@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.0
+
+- **New:** **Umas tab** in the Menu window. Every uma that appears in a race is listed with her face. Choose your own picture for her, or press *Use default face* to go back. Your pictures are saved in `images/uma` (named after the card id), and the default faces are never changed.
+- **New:** the option **Use the faces from Race Overlay when I have not chosen a picture**. Turn it off to show only your own pictures (umas without one get the letter circle). It is kept when you press *Reset look to defaults*.
+- **Better:** the online updater link is filled in already, so **Check online** works without pasting anything.
+
 ## 1.4.0
 
 - **New:** **results board.** After a race a second window (*Umamusume Race Results (Linux)*) shows the final places in two columns like a TV results graphic: place, picture, trainer and uma, finish time, gap to the winner, and the track name at the bottom. It slides in as the tower slides out. Add it to OBS as its own window source. Turn it on or off and choose how long it stays in the Look tab. *Show results board (to place it)* in the Menu and tray lets you position it before a race.

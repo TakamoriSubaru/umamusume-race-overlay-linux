@@ -63,6 +63,7 @@ class ImageStore(QThread):
         self.cache = os.path.join(images_dir, "cache")
         self.map_file = os.path.join(images_dir, "images.json")
         self.extra_dirs = [d for d in extra_dirs if d]
+        self.use_default = True      # False = only the pictures in images/uma (and nothing from Race Overlay)
         for d in (self.players, self.uma, self.cache):
             os.makedirs(d, exist_ok=True)
         if not os.path.exists(self.map_file):
@@ -146,6 +147,8 @@ class ImageStore(QThread):
                 path = find_file_ci(self.uma, stem)
                 if path:
                     return read_file(path)
+        if not self.use_default:
+            return b""
         fname = "chara_stand_%d_%d.webp" % (card // 100, card)
         for d in [self.uma] + self.extra_dirs:
             p = os.path.join(d, fname)

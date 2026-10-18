@@ -29,9 +29,9 @@ from .constants import (
     WAKU_COLORS,
     WAKU_DARK,
 )
-from .databases import OutfitsDB, PlayersDB
+from .databases import UmasDB, OutfitsDB, PlayersDB
 from .frameless import FramelessMixin, fit_window
-from .images import ImageStore, find_wine_thumb_dirs
+from .images import ImageStore, find_file_ci, find_wine_thumb_dirs
 from .results_board import ResultsBoard
 from .settings_dialog import SettingsDialog
 from .simdata import parse_sim
@@ -142,6 +142,8 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.images_dir = images_dir
         self.players = PlayersDB(os.path.join(images_dir, "players.json"))
         self.outfits = OutfitsDB(os.path.join(images_dir, "outfits.json"))
+        self.umas = UmasDB(os.path.join(images_dir, "umas.json"))
+        self.thumbs.use_default = bool(self.s.get("default_faces", True))
         self.thumbs.loaded.connect(self.on_thumb)
         self.thumbs.start()
 
@@ -239,9 +241,14 @@ class OverlayWidget(FramelessMixin, QWidget):
                 new_outfit |= self.outfits.touch(h.chara_id, h.dress_id, h.name)
             if new_outfit:
                 self.outfits.save()
+            new_uma = False
+            for h in self.horses:         # ... and every uma, so you can give her your own picture
+                new_uma |= self.umas.touch(h.card_id, h.chara_id, h.name)
+            self.umas.save()
             if self.dialog is not None:
                 self.dialog.refresh_players()
                 self.dialog.refresh_outfits()
+                self.dialog.refresh_umas()
 
         self.course_shape = payload.get("courseShape")
         self.course_data = payload.get("courseData")
@@ -966,6 +973,48 @@ class OverlayWidget(FramelessMixin, QWidget):
     def clear_player_image(self, trainer):
         self.players.set_image(trainer, "")
         self.refresh_player_images()
+
+    # ----- uma pictures --------------------------------------------------------
+    def refresh_uma_images(self):
+        for k in [k for k in self.pix if k.startswith("c:")]:
+            self.pix.pop(k, None)
+            self.pix_pending.discard(k)
+        for h in self.horses:
+            for key, card in ((h.ukey, h.card_id), (h.bkey, h.chara_id * 100 + 1)):
+                if key:
+                    self.want_img(key, {"kind": "uma", "card_id": card, "chara_id": h.chara_id, "name": h.name})
+        self.update()
+
+    def uma_own_picture(self, card_id):
+        """Path of the picture you chose for this uma (images/uma/<card id>.png), or None."""
+        return find_file_ci(self.thumbs.uma, str(int(card_id)))
+
+    def set_uma_image_file(self, card_id, src_path):
+        import shutil
+        self.clear_uma_image(card_id, refresh=False)
+        ext = os.path.splitext(src_path)[1].lower()
+        if ext not in IMG_EXTS:
+            ext = ".png"
+        shutil.copyfile(src_path, os.path.join(self.thumbs.uma, "%d%s" % (int(card_id), ext)))
+        self.refresh_uma_images()
+
+    def clear_uma_image(self, card_id, refresh=True):
+        """Back to the default face (your picture file is deleted)."""
+        while True:
+            path = self.uma_own_picture(card_id)
+            if not path:
+                break
+            try:
+                os.remove(path)
+            except OSError:
+                break
+        if refresh:
+            self.refresh_uma_images()
+
+    def set_default_faces(self, on):
+        self.thumbs.use_default = bool(on)
+        self.set_setting("default_faces", bool(on))
+        self.refresh_uma_images()
 
     # ----- preview -------------------------------------------------------------
     def build_preview_race(self):

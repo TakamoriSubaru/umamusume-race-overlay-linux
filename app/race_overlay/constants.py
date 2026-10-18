@@ -68,6 +68,7 @@ DEFAULT_SETTINGS = {
     "show_overlay": False,     # is the overlay window shown? (remembered between starts)
     "open_menu": True,         # open the Menu window when the program starts
     "update_url": "https://github.com/TakamoriSubaru/umamusume-race-overlay-linux/releases/latest/download/latest.json",  # "Check online" link
+    "default_faces": True,     # use the faces found in Race Overlay when you have not chosen a picture
     "pictures": "both",        # "both" = uma image + small player picture, "uma" = uma image only,
                                # "player" = player picture in the big circle (uma image if the player has none)
     "bg": "#090912",
@@ -95,7 +96,7 @@ DEFAULT_SETTINGS = {
 
 
 KEEP_ON_RESET = ("source", "saved_races_dir", "watch_subfolders", "start_delay", "auto_hide",
-                 "update_url", "open_menu", "show_overlay", "results_board", "results_seconds")
+                 "update_url", "open_menu", "show_overlay", "results_board", "results_seconds", "default_faces")
 
 
 # Colour sets for the Look tab. Each one only changes colours.

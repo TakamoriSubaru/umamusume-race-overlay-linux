@@ -136,6 +136,7 @@ The **results board** is its own window: add a second **Window Capture (Xcomposi
 - **Players tab:** every trainer that appears in a race is added automatically. Select one and press **Choose picture...** (a file) or **Paste link...** (a web address).
 - **Uma image and player picture are two different pictures.** The uma image belongs to the uma (and its outfit) and is always the same. The player picture belongs to the trainer and follows them, whatever uma they run.
 - **Pictures mode** (Look tab, tray menu, right-click menu, or press **T** to cycle): *Uma image + player picture* (default: big uma image with a small player picture on its corner), *Uma image only*, or *Player picture* (in the big circle, the uma image is used when the player has none). A player without a picture simply shows no small picture.
+- **Umas tab:** every uma that appears in a race is listed with her face. Select one and press **Choose picture...** to use your own, or **Use default face** to go back. Untick *Use the faces from Race Overlay...* to show only your own pictures.
 - **Uma faces** are found automatically in the `character_thumbs` folder of Race Overlay inside your Wine prefix. If they are not found, copy that folder's content into `images/uma/`. To replace one, put a file named after the card id, chara id or uma name there (for example `100101.png` or `Special Week.png`).
 - **Player pictures** can also be placed by hand in `images/players/`, named after the trainer (for example `Takamori.png`).
 

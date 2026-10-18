@@ -1,7 +1,7 @@
 """The Menu / Settings window."""
 
 import os
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtCore import QSize, QTimer, Qt
 from PyQt6.QtGui import QColor, QFont, QIcon
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -46,6 +46,7 @@ from .updater import (
     read_update_file,
     version_tuple,
 )
+from .images import find_file_ci
 from .util import open_folder
 
 
@@ -111,8 +112,8 @@ class SettingsDialog(QDialog):
         bl = QVBoxLayout(box)
         for title, path, hint in (
                 ("Uma faces", ov.thumbs.uma,
-                 "Found automatically from Race Overlay. To add or replace one, name the file with the card id, "
-                 "chara id or uma name, e.g. 100101.png or Special Week.png"),
+                 "Easiest: use the Umas tab. Or name the file with the card id, chara id or uma name, "
+                 "e.g. 100101.png or Special Week.png. Without a picture of yours the face from Race Overlay is used."),
                 ("Player pictures", ov.thumbs.players,
                  "Easiest: use the Players tab. Or name the file after the trainer, e.g. Takamori.png")):
             lab = QLabel("<b>%s</b><br>%s<br><i>%s</i>" % (title, path, hint))
@@ -401,6 +402,45 @@ class SettingsDialog(QDialog):
         v.addLayout(br)
         tabs.addTab(pl, "Players")
 
+        # ---- Umas tab (the uma pictures)
+        ut = QWidget()
+        uv = QVBoxLayout(ut)
+        uinfo = QLabel("Every uma that appears in a race is collected here. Choose your own picture for her, or "
+                       "remove it to go back to the default face. Your pictures are kept in "
+                       "<i>images/uma</i> and only change this program.")
+        uinfo.setWordWrap(True)
+        uv.addWidget(uinfo)
+        self.cb_default_faces = QCheckBox("Use the faces from Race Overlay when I have not chosen a picture")
+        self.cb_default_faces.setChecked(bool(ov.s.get("default_faces", True)))
+        self.cb_default_faces.toggled.connect(ov.set_default_faces)
+        uv.addWidget(self.cb_default_faces)
+        self.utable = QTableWidget(0, 4)
+        self.utable.setHorizontalHeaderLabels(["Face", "Uma", "Card id", "Picture"])
+        self.utable.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.utable.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.utable.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.utable.horizontalHeader().setStretchLastSection(True)
+        self.utable.verticalHeader().setVisible(False)
+        self.utable.verticalHeader().setDefaultSectionSize(46)
+        self.utable.setIconSize(QSize(40, 40))
+        self.utable.setAlternatingRowColors(True)
+        self.utable.setShowGrid(False)
+        self.utable.setColumnWidth(0, 56)
+        self.utable.setColumnWidth(1, 190)
+        self.utable.setColumnWidth(2, 80)
+        uv.addWidget(self.utable, 1)
+        ubr = QHBoxLayout()
+        for text, fn in (("Choose picture...", self.choose_uma_file), ("Use default face", self.remove_uma_pic),
+                         ("Add uma...", self.add_uma), ("Open folder", lambda: open_folder(ov.thumbs.uma))):
+            b = QPushButton(text)
+            if text.startswith("Choose"):
+                b.setObjectName("primary")
+            b.clicked.connect(fn)
+            ubr.addWidget(b)
+        uv.addLayout(ubr)
+        tabs.addTab(ut, "Umas")
+        self._uma_pix_count = -1
+
         # ---- Outfits tab (names for alternative outfits)
         ot = QWidget()
         ov_l = QVBoxLayout(ot)
@@ -426,6 +466,7 @@ class SettingsDialog(QDialog):
         ov_l.addWidget(self.otable, 1)
         tabs.addTab(ot, "Outfits")
         self.refresh_outfits()
+        self.refresh_umas()
 
         self.sync_widgets()
         self.poll()
@@ -708,6 +749,8 @@ class SettingsDialog(QDialog):
         self.cb_prev.blockSignals(False)
         if self.isVisible() and self.ov.players.reload_if_changed():
             self.refresh_players()
+        if self.isVisible() and len(self.ov.pix) != self._uma_pix_count:
+            self.refresh_umas()           # new faces have finished loading
 
     # ---- players helpers
     def selected(self):
@@ -793,6 +836,68 @@ class SettingsDialog(QDialog):
         if name:
             self.ov.clear_player_image(name)
             self.refresh_players()
+
+    # ---- uma pictures helpers
+    def refresh_umas(self):
+        ov = self.ov
+        keep = None
+        r = self.utable.currentRow()
+        if r >= 0 and self.utable.item(r, 2):
+            keep = self.utable.item(r, 2).text()
+        rows = ov.umas.rows()
+        self.utable.setRowCount(len(rows))
+        for i, (card, chara, name, seen) in enumerate(rows):
+            key = "c:%d" % card
+            if key not in ov.pix and key not in ov.pix_pending:
+                ov.want_img(key, {"kind": "uma", "card_id": card, "chara_id": chara, "name": name})
+            face = QTableWidgetItem()
+            pm = ov.pix.get(key)
+            if pm is not None and not pm.isNull():
+                face.setIcon(QIcon(pm))
+            own = ov.uma_own_picture(card)
+            shown = "mine: " + os.path.basename(own) if own else ("default" if ov.thumbs.use_default else "(none)")
+            self.utable.setItem(i, 0, face)
+            for c, text in enumerate((name, str(card), shown), start=1):
+                self.utable.setItem(i, c, QTableWidgetItem(text))
+            if str(card) == keep:
+                self.utable.selectRow(i)
+        self._uma_pix_count = len(ov.pix)
+
+    def selected_uma(self):
+        r = self.utable.currentRow()
+        it = self.utable.item(r, 2) if r >= 0 else None
+        if it is None:
+            QMessageBox.information(self, "Pick a uma", "Click a uma in the list first.")
+            return None, ""
+        return int(it.text()), self.utable.item(r, 1).text()
+
+    def choose_uma_file(self):
+        card, name = self.selected_uma()
+        if not card:
+            return
+        path, _ = QFileDialog.getOpenFileName(self, "Choose a picture for " + name, os.path.expanduser("~"),
+                                              "Images (*.png *.jpg *.jpeg *.webp *.bmp *.gif)")
+        if path:
+            self.ov.set_uma_image_file(card, path)
+            self.refresh_umas()
+
+    def remove_uma_pic(self):
+        card, _ = self.selected_uma()
+        if card:
+            self.ov.clear_uma_image(card)
+            self.refresh_umas()
+
+    def add_uma(self):
+        text, ok = QInputDialog.getText(self, "Add uma", "Card id (a number like 100101):")
+        if not ok or not text.strip().isdigit():
+            if ok:
+                QMessageBox.warning(self, "Not a number", "The card id is a number, for example 100101.")
+            return
+        card = int(text.strip())
+        name, ok = QInputDialog.getText(self, "Add uma", "Name of the uma:")
+        if ok and name.strip():
+            self.ov.umas.add(card, name.strip())
+            self.refresh_umas()
 
     def add_trainer(self):
         name, ok = QInputDialog.getText(self, "Add trainer", "Trainer name (exactly as shown in the race):")
