@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Install icon (double-click)
+Comment=Adds the Umamusume Race Overlay (Linux) icon to your menu and Desktop
+Exec=sh -c 'cd "$(dirname "$1")" && ./install_launcher.sh' sh %k
+Icon=system-run
+Terminal=false
+Categories=Game;

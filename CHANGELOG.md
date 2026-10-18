@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.1
+
+- **New:** no terminal needed. **Install icon (double-click)** adds the menu / Desktop icon. Problems (and the first-time setup) are shown in a popup window, and the log is written to `/tmp/race-overlay-native.log`.
+- **New:** Race Overlay is found automatically in your Documents, Downloads or Desktop folder and linked to the game's Wine prefix. A broken link is repaired. The new `RACE_OVERLAY_DIR` setting in `settings.sh` is for any other place. Race Overlay itself is still not part of this repository.
+- **Fix:** the start script passed a cut-off option (`--disable-gpu-san`) to Race Overlay.
+- **Fix:** a failed first-time install no longer leaves a half-made Python folder that stops every later start.
+- **Note:** copy the whole folder when you install this version, because it adds `lib.sh`. The updater accepts it.
+
 ## 1.5.0
 
 - **New:** **Umas tab** in the Menu window. Every uma that appears in a race is listed with her face. Choose your own picture for her, or press *Use default face* to go back. Your pictures are saved in `images/uma` (named after the card id), and the default faces are never changed.

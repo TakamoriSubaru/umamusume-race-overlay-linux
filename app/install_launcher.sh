@@ -3,6 +3,7 @@
 # so you can start everything with a double-click (no terminal needed).
 DIR="$(cd "$(dirname "$0")" && pwd)"
 chmod +x "$DIR"/*.sh
+source "$DIR/lib.sh"
 
 if [ ! -f "$DIR/icon.png" ]; then
   echo "icon.png was not found in $DIR"
@@ -44,5 +45,4 @@ if [ -d "$DESK" ]; then
   gio set "$NEW" metadata::trusted true 2>/dev/null
 fi
 
-echo "Done! Look for the 'Umamusume Race Overlay (Linux)' icon on your Desktop or in the application menu."
-echo "If the Desktop icon still looks like a plain document: right-click it and choose 'Allow Launching'."
+say "Umamusume Race Overlay" "Done! Look for the 'Umamusume Race Overlay (Linux)' icon on your Desktop or in the application menu.\n\nIf the Desktop icon looks like a plain document: right-click it and choose Allow Launching."

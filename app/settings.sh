@@ -31,3 +31,7 @@ GAME_MATCH="umamusume"
 # Only used when MODE="watch": folder where horseACT saves the race JSON files
 # (the folders inside it are searched too)
 WATCH_DIR="${WATCH_DIR:-$HOME/Documents/Saved races}"
+
+# Where the original Race Overlay program is (the folder with "Race Overlay.exe").
+# Leave empty: it is looked for in your Documents, Downloads and Desktop folders.
+RACE_OVERLAY_DIR="${RACE_OVERLAY_DIR:-}"

@@ -14,7 +14,7 @@ from .util import http_get
 
 
 UPDATE_FILES = {"race_overlay_native.py", "icon.png", "start_auto.sh", "start_overlay.sh",
-                "start_race_overlay.sh", "launch_with_game.sh", "install_launcher.sh", "settings.sh"}
+                "start_race_overlay.sh", "launch_with_game.sh", "install_launcher.sh", "settings.sh", "lib.sh"}
 
 
 KEEP_IF_EXISTS = {"settings.sh"}   # your own edits are never overwritten

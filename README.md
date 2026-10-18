@@ -69,14 +69,16 @@
 - Linux with an **X11** session (Linux Mint Cinnamon is X11 by default) and **OBS**
 - Python 3.9 or newer (`python3`, `python3-venv`)
 - Uma Musume running through Steam/Proton
-- The original **Race Overlay** (a separate community tool, **not included** here), installed in the same Wine prefix as the game. It reads the race data from the game, and this program displays it.
+- The original **Race Overlay** (a separate community tool, **not included** here). It reads the race data from the game, and this program displays it. Put its folder (the one with `Race Overlay.exe`) anywhere in your Documents, Downloads or Desktop folder, and the start script finds it and connects it to the game's Wine prefix for you. If it is somewhere else, write the path after `RACE_OVERLAY_DIR=` in `settings.sh`.
 
 ---
 
 ## 🚀 Install
 
 1. Go to [**Releases**](../../releases/latest), download `race-overlay-native-X.Y.Z.zip` and extract it, for example to `~/Documents/race-overlay-native`. (The files you need are inside that zip. The `app/` folder in this repository holds the same files for developers.)
-2. Open a terminal in that folder and run:
+2. Add the icon. **No terminal needed:** double-click **Install icon (double-click)**. If your file manager asks, choose *Allow Launching* (or right-click the file, then *Properties*, then *Permissions*, then tick *Allow executing*) and double-click it again.
+
+   A terminal works too:
 
    ```bash
    chmod +x *.sh
@@ -86,7 +88,8 @@
    This adds **Umamusume Race Overlay (Linux)** to your application menu and your Desktop. If the Desktop icon looks like a plain document, right-click it and choose **Allow Launching**.
 
 3. Open `settings.sh` and check the paths (Wine prefix, Wine binary). The defaults match a Steam + GE-Proton setup, so change them if yours differ.
-4. The first start installs the Python package it needs (PyQt6). This takes a few minutes and only happens once.
+4. The first start installs the Python package it needs (PyQt6). A popup tells you when it starts, it takes a few minutes and only happens once.
+5. If something goes wrong, a popup shows the error. The full log is `/tmp/race-overlay-native.log`.
 
 > [!TIP]
 > If you get an error mentioning `xcb` or `libxcb-cursor`, run `sudo apt install libxcb-cursor0` and start again.
@@ -306,6 +309,8 @@ app/                      everything that is in the release zip:
   start_race_overlay.sh     starts Race Overlay under Wine after the game
   launch_with_game.sh       for the Steam launch option
   install_launcher.sh       creates the menu / Desktop icon
+  Install icon (double-click).desktop   the same, for a double-click
+  lib.sh                    popup messages used by the start scripts
   push_update.sh, release.sh  for the developer (not in the zip)
 images/                   your pictures, players.json and outfits.json (created automatically, not in the repo)
 backup/                   old versions kept by the updater (not in the repo)
