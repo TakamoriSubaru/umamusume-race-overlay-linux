@@ -90,6 +90,8 @@ QSlider::groove:horizontal { height: 8px; background: %(input)s; border: 1px sol
 QSlider::sub-page:horizontal { background: %(grad)s; border-radius: 5px; }
 QSlider::handle:horizontal { background: #ffffff; border: 3px solid %(pink)s; width: 14px; height: 14px;
                              margin: -8px 0; border-radius: 10px; }
+QPlainTextEdit { background: %(input)s; border: 1px solid %(line)s; border-radius: 12px; padding: 6px;
+                 font-family: monospace; font-size: 11px; selection-background-color: rgba(255,111,174,95); }
 QTableWidget { background: %(input)s; alternate-background-color: #191521; border: 1px solid %(line)s;
                border-radius: 12px; gridline-color: transparent;
                selection-background-color: rgba(255,111,174,95); selection-color: #ffffff; outline: 0; }

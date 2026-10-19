@@ -6,6 +6,7 @@ from PyQt6.QtGui import QColor, QFont, QIcon
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QAbstractSpinBox,
+    QApplication,
     QCheckBox,
     QColorDialog,
     QComboBox,
@@ -21,6 +22,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QScrollArea,
     QSlider,
@@ -33,7 +35,9 @@ from PyQt6.QtWidgets import (
 )
 
 from .constants import APP_NAME, APP_VERSION, SCRIPT_DIR, STATE_COLORS, THEME_PRESETS
+from . import logbuf
 from .databases import BUILTIN_OUTFITS
+from .diagnostics import LOG_FILES, read_tail, run_checks
 from .sources import choose_source, count_race_files
 from .theme import Banner, THEME, build_theme_qss
 from .updater import (
@@ -465,6 +469,42 @@ class SettingsDialog(QDialog):
         self.otable.itemChanged.connect(self.on_outfit_edited)
         ov_l.addWidget(self.otable, 1)
         tabs.addTab(ot, "Outfits")
+
+        # ---- Status tab: checks and the log, so you do not need a terminal
+        stt = QWidget()
+        sv = QVBoxLayout(stt)
+        self.lbl_checks = QLabel()
+        self.lbl_checks.setWordWrap(True)
+        self.lbl_checks.setTextFormat(Qt.TextFormat.RichText)
+        self.lbl_checks.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        sv.addWidget(self.lbl_checks)
+        srow = QHBoxLayout()
+        self.cmb_log = QComboBox()
+        self.cmb_log.addItem("Log: this program", None)
+        for title, path in LOG_FILES:
+            self.cmb_log.addItem("Log: " + title, path)
+        self.cmb_log.currentIndexChanged.connect(lambda _i: self.refresh_status())
+        self.cb_fixme = QCheckBox("Hide Wine noise")
+        self.cb_fixme.setChecked(True)
+        self.cb_fixme.toggled.connect(lambda _on: self.refresh_status())
+        btn_again = QPushButton("Check again")
+        btn_again.clicked.connect(lambda: self.refresh_status())
+        self.btn_copy = QPushButton("Copy for support")
+        self.btn_copy.setObjectName("primary")
+        self.btn_copy.clicked.connect(self.copy_status)
+        srow.addWidget(self.cmb_log, 1)
+        srow.addWidget(self.cb_fixme)
+        srow.addWidget(btn_again)
+        srow.addWidget(self.btn_copy)
+        sv.addLayout(srow)
+        self.txt_log = QPlainTextEdit()
+        self.txt_log.setReadOnly(True)
+        self.txt_log.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        sv.addWidget(self.txt_log, 1)
+        tabs.addTab(stt, "Status")
+        self._tabs = tabs
+        self._status_tab = stt
+        tabs.currentChanged.connect(lambda _i: self.refresh_status() if tabs.currentWidget() is stt else None)
         self.refresh_outfits()
         self.refresh_umas()
 
@@ -749,6 +789,8 @@ class SettingsDialog(QDialog):
         self.cb_prev.blockSignals(False)
         if self.isVisible() and self.ov.players.reload_if_changed():
             self.refresh_players()
+        if self.isVisible() and self._tabs.currentWidget() is self._status_tab:
+            self.refresh_status()
         if self.isVisible() and len(self.ov.pix) != self._uma_pix_count:
             self.refresh_umas()           # new faces have finished loading
 
@@ -836,6 +878,48 @@ class SettingsDialog(QDialog):
         if name:
             self.ov.clear_player_image(name)
             self.refresh_players()
+
+    # ---- status tab
+    CHECK_COLORS = {"ok": "#2ecc71", "bad": "#ff5c6c", "warn": "#f1c40f", "info": "#9aa0b4"}
+
+    def log_text(self, max_lines=400):
+        path = self.cmb_log.currentData()
+        if path is None:
+            return "\n".join(logbuf.lines()[-max_lines:])
+        text = read_tail(path, max_lines, self.cb_fixme.isChecked())
+        return text or "(no log yet: %s)" % path
+
+    def refresh_status(self):
+        rows = []
+        for state, title, hint in run_checks(self.ov):
+            line = '<span style="color:%s">&#9679;</span> %s' % (self.CHECK_COLORS.get(state, "#9aa0b4"), title)
+            if hint:
+                line += '<br><span style="color:#9aa0b4">&nbsp;&nbsp;&nbsp;&nbsp;%s</span>' % hint
+            rows.append(line)
+        html = "<br>".join(rows)
+        if html != getattr(self, "_checks_html", None):
+            self._checks_html = html
+            self.lbl_checks.setText(html)
+        text = self.log_text()
+        if text == getattr(self, "_log_shown", None):
+            return
+        self._log_shown = text
+        sb = self.txt_log.verticalScrollBar()
+        at_bottom = sb.value() >= sb.maximum() - 4
+        keep = sb.value()
+        self.txt_log.setPlainText(text)
+        sb.setValue(sb.maximum() if at_bottom else keep)
+
+    def copy_status(self):
+        parts = ["%s %s" % (APP_NAME, APP_VERSION)]
+        for state, title, hint in run_checks(self.ov):
+            parts.append("[%s] %s%s" % (state, title, (" - " + hint) if hint else ""))
+        parts.append("")
+        parts.append("--- %s ---" % self.cmb_log.currentText())
+        parts.append(self.log_text(80))
+        QApplication.clipboard().setText("\n".join(parts))
+        self.btn_copy.setText("Copied!")
+        QTimer.singleShot(1500, lambda: self.btn_copy.setText("Copy for support"))
 
     # ---- uma pictures helpers
     def refresh_umas(self):

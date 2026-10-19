@@ -36,6 +36,7 @@
 - [Command line options](#-command-line-options)
 - [Updating](#-updating)
 - [Folder layout](#-folder-layout)
+- [Status tab](#-status-tab-no-terminal-needed)
 - [Troubleshooting](#-troubleshooting)
 - [Roadmap](#-roadmap)
 - [Disclaimer](#-disclaimer)
@@ -299,6 +300,7 @@ app/                      everything that is in the release zip:
     results_board.py          the results board window (after the race)
     frameless.py              shared by both windows: move / resize, slide side, auto size
     settings_dialog.py        the Menu / Settings window
+    diagnostics.py, logbuf.py the Status tab: checks and the log
     theme.py, tray.py         look of the settings window, tray icon
     updater.py                updating with a backup
     main.py                   command line options and start
@@ -325,6 +327,18 @@ Settings are stored in `~/.config/race-overlay-native/config.json`.
 The program works best through X11. On a Wayland desktop it starts itself **through XWayland** (Qt's `xcb` platform) when it finds `XDG_SESSION_TYPE=wayland` and a `DISPLAY`, and prints a line about it. That way the window can stay on top, can be moved and resized, and shows up in OBS's window list. Set `QT_QPA_PLATFORM` yourself, or pass `--keep-wayland`, to skip this.
 
 OBS has to see X11 windows too. If **Window Capture (Xcomposite)** is missing in OBS, or the window is not listed, start OBS through XWayland as well: `QT_QPA_PLATFORM=xcb obs`. Otherwise use OBS's PipeWire based **Window Capture** source and pick the window in the dialog your desktop shows. If Qt complains about `xcb-cursor`, install `libxcb-cursor0` (Debian / Ubuntu) or `xcb-util-cursor` (Fedora / Arch).
+
+---
+
+## 🩺 Status tab (no terminal needed)
+
+The **Status** tab in the Menu window shows whether everything works, and a small log, so you never have to open a terminal:
+
+- **Checks** with a green, yellow or red dot: is the game running, does the Race Overlay server answer, was the Race Overlay folder found, is a race loaded, were uma faces found.
+- **Log:** pick *this program* (what it just did: status changes, *race loaded*, *race started*, *race finished*) or one of the log files of the start scripts (*Start script*, *Race Overlay server*, *Race Overlay program*). *Hide Wine noise* removes the endless Wine `fixme` lines.
+- **Copy for support** puts the version, the checks and the last lines of the log on your clipboard, ready to paste when you ask for help.
+
+It only shows information. It is not a command line, and it does not change anything.
 
 ---
 

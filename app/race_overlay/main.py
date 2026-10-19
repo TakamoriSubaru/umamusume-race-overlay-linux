@@ -7,6 +7,7 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon
 
+from . import logbuf
 from .config import load_config, save_config
 from .constants import APP_NAME, APP_VERSION, SCRIPT_DIR
 from .overlay_widget import OverlayWidget
@@ -64,6 +65,7 @@ def main():
     ap.add_argument("--keep-wayland", action="store_true",
                     help="on a Wayland desktop, do not switch to XWayland (windows then cannot stay on top)")
     args = ap.parse_args()
+    logbuf.install()          # remembers what the program prints, for the Status tab
 
     note = prefer_xwayland(args)
     if note:

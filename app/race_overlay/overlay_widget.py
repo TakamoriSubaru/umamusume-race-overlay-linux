@@ -7,6 +7,7 @@ from PyQt6.QtCore import QPointF, QRectF, QTimer, Qt
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen, QPixmap
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon, QWidget
 
+from . import logbuf
 from .config import save_config
 from .constants import (
     APP_NAME,
@@ -174,6 +175,8 @@ class OverlayWidget(FramelessMixin, QWidget):
         source.start()
 
     def on_status(self, text):
+        if text != self.status_text:
+            logbuf.add("status: " + text.replace("\n", " | "))
         self.status_text = text
         t = text.lower()
         if "not reachable" in t or "not found" in t:
@@ -222,6 +225,7 @@ class OverlayWidget(FramelessMixin, QWidget):
             print("SimData parse error:", e)
             return
         self.setup_race(sim, payload, rmap, collect=True)
+        logbuf.add("race loaded: %d umas" % len(self.horses))
 
     def setup_race(self, sim, payload, rmap, collect=False):
         self.times, self.frames, self.results = sim["times"], sim["frames"], sim["results"]
@@ -300,6 +304,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         if p.get("active") and self.frames:
             if not self.racing:
                 self.racing = True
+                logbuf.add("race started (%d umas)" % len(self.horses))
             t = float(p.get("time", 0))
             self.clock_paused = self.prev_clock >= 0 and abs(t - self.prev_clock) < 0.02
             self.prev_clock = t
@@ -311,6 +316,7 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.clock_active = False
             self.prev_clock = -1.0
             if self.racing and self.hide_deadline is None:
+                logbuf.add("race finished")
                 if self.frames:
                     max_t = max([r["finishTimeRaw"] for r in self.results] + [self.last_clock_time])
                     self.compute(max_t + 0.001)

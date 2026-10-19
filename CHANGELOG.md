@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.4
+
+- **New:** **Status tab** in the Menu window: green / yellow / red checks (game running, Race Overlay server answers, Race Overlay folder found, race loaded, uma faces found) and a log viewer for this program and the start scripts' log files, with *Hide Wine noise* and *Copy for support*. No terminal needed. It only shows information.
+- **Better:** the program now writes what it does (status changes, race loaded / started / finished) to its log.
+- **Note:** copy the whole folder when you install this version, because it adds `diagnostics.py` and `logbuf.py` in `race_overlay/`. The updater accepts them.
+
 ## 1.5.3
 
 - **New:** the Race Overlay folder can sit inside your project folder (next to `app`). It is found there first, and `.gitignore` makes sure it is never uploaded to GitHub.
