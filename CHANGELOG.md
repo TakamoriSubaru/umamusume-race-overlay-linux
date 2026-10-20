@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.1
+
+- **Better:** the standings are numbered 1, 2, 3 ... without repeats, even when players have the same points (they keep the order of the sheet).
+
 ## 1.6.0
 
 - **New:** **points after every race**: 1st gets as many points as there are players, the last gets 1 (ties share). The results board has a new **PTS** column.
