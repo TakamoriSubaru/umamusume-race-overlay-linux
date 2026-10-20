@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.0
+
+- **New:** **points after every race**: 1st gets as many points as there are players, the last gets 1 (ties share). The results board has a new **PTS** column.
+- **New:** **standings board**, its own window (*Umamusume Standings (Linux)*). It shows everybody's points and flips through the pages while the next race is set up, and goes away when it starts.
+- **New:** **Standings tab**: use the points counted by the program (undo, save as .csv, new bracket) or read a **Google Sheet** link / `.csv` / `.xlsx` (choose the columns, reloaded every minute).
+- **Note:** copy the whole folder when you install this version: it adds `scoring.py`, `sheets.py` and `standings_board.py` in `race_overlay/`. The updater accepts them. Old settings keep working.
+
 ## 1.5.4
 
 - **New:** **Status tab** in the Menu window: green / yellow / red checks (game running, Race Overlay server answers, Race Overlay folder found, race loaded, uma faces found) and a log viewer for this program and the start scripts' log files, with *Hide Wine noise* and *Copy for support*. No terminal needed. It only shows information.

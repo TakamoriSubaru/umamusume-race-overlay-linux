@@ -23,11 +23,18 @@ FOOT_H = 40         # track name band
 ONE_COLUMN_MAX = 6  # up to this many umas: one column, more: two columns
 
 
+PTS_W = 56          # extra width of the points column (only when the race is scored)
+
+
 class ResultsBoard(FramelessMixin, QWidget):
+    NAME = RESULTS_NAME         # <- the window name you pick in OBS
+    TITLE = "RACE RESULTS"
+    POS_KEY, SCALE_KEY = "results_pos", "results_scale"
+
     def __init__(self, ov):
         super().__init__()
         self.ov = ov
-        self.setWindowTitle(RESULTS_NAME)      # <- the window name you pick in OBS
+        self.setWindowTitle(self.NAME)
         self.setMinimumSize(220, 100)
         self.setMouseTracking(True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
@@ -38,6 +45,7 @@ class ResultsBoard(FramelessMixin, QWidget):
         self.footer = ""
         self.cols = 2
         self.per_col = 0
+        self.col_w = COL_W
         self.lw, self.lh = 2 * PAD + 2 * COL_W + GUTTER, 300
         self.slide = 0.0         # 0 = out, 1 = fully in
         self.want = 0.0
@@ -53,8 +61,8 @@ class ResultsBoard(FramelessMixin, QWidget):
                 self.icon = pm.scaled(80, 80, Qt.AspectRatioMode.KeepAspectRatio,
                                       Qt.TransformationMode.SmoothTransformation)
 
-        self.pref_scale = float(ov.cfg.get("results_scale") or 1.0)
-        pos = ov.cfg.get("results_pos")
+        self.pref_scale = float(ov.cfg.get(self.SCALE_KEY) or 1.0)
+        pos = ov.cfg.get(self.POS_KEY)
         self._placed = bool(pos and not ov.args.reset_window)
         if self._placed:
             self.move(int(pos[0]), int(pos[1]))
@@ -88,7 +96,8 @@ class ResultsBoard(FramelessMixin, QWidget):
         n = len(self.entries)
         self.cols = 1 if n <= ONE_COLUMN_MAX else 2
         self.per_col = int(math.ceil(n / float(self.cols))) if n else 0
-        self.lw = 2 * PAD + self.cols * COL_W + (self.cols - 1) * GUTTER
+        self.col_w = COL_W + (PTS_W if any("pts" in e for e in self.entries) else 0)
+        self.lw = 2 * PAD + self.cols * self.col_w + (self.cols - 1) * GUTTER
         self.lh = TOP_H + SUB_H + max(1, self.per_col) * ROW_H + FOOT_H + PAD
         fit_window(self, self.lw, self.lh, self.pref_scale)
         if not self._placed:
@@ -159,8 +168,8 @@ class ResultsBoard(FramelessMixin, QWidget):
 
     def remember(self):
         """Keep the position and size for the next start."""
-        self.ov.cfg["results_pos"] = [self.x(), self.y()]
-        self.ov.cfg["results_scale"] = round(self.pref_scale, 4)
+        self.ov.cfg[self.POS_KEY] = [self.x(), self.y()]
+        self.ov.cfg[self.SCALE_KEY] = round(self.pref_scale, 4)
 
     # ----- drawing ----------------------------------------------------------------------
     def paintEvent(self, _ev):
@@ -214,18 +223,25 @@ class ResultsBoard(FramelessMixin, QWidget):
             p.drawPixmap(QRectF(PAD, 8, 38, 38), self.icon, QRectF(self.icon.rect()))
         p.setFont(self.spaced(24, True, 2.5))
         p.setPen(tc)
-        p.drawText(QRectF(0, 0, lw, TOP_H - 3), Qt.AlignmentFlag.AlignCenter, "RACE RESULTS")
+        p.drawText(QRectF(0, 0, lw, TOP_H - 3), Qt.AlignmentFlag.AlignCenter, getattr(self, "TITLE_TEXT", None) or self.TITLE)
+
+    def has_pts(self):
+        return any("pts" in e for e in self.entries)
 
     def draw_columns(self, p, tc, sc, ac):
         for c in range(self.cols):
-            x = PAD + c * (COL_W + GUTTER)
+            x = PAD + c * (self.col_w + GUTTER)
             p.setFont(self.spaced(10, True, 1.5))
             p.setPen(sc)
-            p.drawText(QRectF(x, TOP_H, COL_W - 10, SUB_H), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                       "TIME")
+            pw = PTS_W if self.has_pts() else 0
+            p.drawText(QRectF(x, TOP_H, self.col_w - 10 - pw, SUB_H),
+                       Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, "TIME")
+            if pw:
+                p.drawText(QRectF(x, TOP_H, self.col_w - 10, SUB_H),
+                           Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, "PTS")
         for i, ent in enumerate(self.entries):
             c, r = divmod(i, self.per_col)
-            x = PAD + c * (COL_W + GUTTER)
+            x = PAD + c * (self.col_w + GUTTER)
             y = TOP_H + SUB_H + r * ROW_H
             self.draw_entry(p, ent, x, y, tc, sc, ac)
 
@@ -236,7 +252,7 @@ class ResultsBoard(FramelessMixin, QWidget):
         rh = ROW_H - 4
 
         row = QPainterPath()
-        row.addRoundedRect(QRectF(x, y, COL_W, rh), 6, 6)
+        row.addRoundedRect(QRectF(x, y, self.col_w, rh), 6, 6)
         bg = QColor(tc)
         bg.setAlpha(20)
         p.fillPath(row, bg)
@@ -261,7 +277,8 @@ class ResultsBoard(FramelessMixin, QWidget):
         # names
         name_x = x + 82
         time_w = 92
-        name_w = COL_W - 82 - time_w - 4
+        pw = PTS_W if "pts" in ent else 0
+        name_w = self.col_w - 82 - time_w - 4 - pw
         trainer, label = h.trainer, h.label
         if trainer:
             tf = ov.fnt(13, True)
@@ -286,7 +303,12 @@ class ResultsBoard(FramelessMixin, QWidget):
                        QFontMetrics(tf).elidedText(label, Qt.TextElideMode.ElideRight, int(name_w)))
 
         # time + gap to the winner
-        tx = x + COL_W - time_w - 8
+        tx = x + self.col_w - time_w - 8 - pw
+        if pw:
+            p.setFont(ov.fnt(17, True, mono=True))
+            p.setPen(ac if place == 1 else tc)
+            p.drawText(QRectF(x + self.col_w - pw - 6, y, pw, rh),
+                       Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, str(ent["pts"]))
         p.setFont(ov.fnt(14, True, mono=True))
         p.setPen(tc)
         p.drawText(QRectF(tx, y + 5, time_w, 18), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,

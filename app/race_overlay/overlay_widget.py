@@ -34,9 +34,11 @@ from .databases import UmasDB, OutfitsDB, PlayersDB
 from .frameless import FramelessMixin, fit_window
 from .images import ImageStore, find_file_ci, find_wine_thumb_dirs
 from .results_board import ResultsBoard
+from .scoring import ScoreBook, points_for
 from .settings_dialog import SettingsDialog
 from .simdata import parse_sim
 from .sources import WatchThread, choose_source
+from .standings_board import StandingsBoard
 from .tray import make_tray_icon
 from .updater import restart_program
 from .util import fmt_time, open_folder
@@ -155,6 +157,8 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.resize(BASE_W, 420)
 
         self.board = ResultsBoard(self)
+        self.book = ScoreBook()                 # points of every race (scores.json)
+        self.standings = StandingsBoard(self)
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
@@ -233,6 +237,7 @@ class OverlayWidget(FramelessMixin, QWidget):
 
         self.board_done = False
         self.board.dismiss()                 # the results of the last race go away
+        self.standings.dismiss()
         self.horses = self.build_horses(payload, rmap)
 
         if collect:   # remember every trainer we see, so you can give them a picture
@@ -366,6 +371,7 @@ class OverlayWidget(FramelessMixin, QWidget):
             else:
                 h.y += (h.target - h.y) * k
         self.board.tick(now, dt)
+        self.standings.tick(now, dt)
         self.update()
 
     # ----- tower maths (port of renderTime) ------------------------------------
@@ -761,6 +767,8 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.act_show = m.addAction("Show overlay window", lambda: self.set_overlay_visible(not self.window_wanted()))
         m.addAction("Menu / Settings...", self.open_settings)
         self.act_board = m.addAction("Show results board (to place it)", lambda: self.set_board_pinned(not self.board.pinned))
+        self.act_stand = m.addAction("Show standings board (to place it)",
+                                     lambda: self.set_standings_pinned(not self.standings.pinned))
         self.act_prev = m.addAction("Show preview race")
         self.act_prev.setCheckable(True)
         self.act_prev.triggered.connect(lambda on: self.set_preview(on))
@@ -791,6 +799,7 @@ class OverlayWidget(FramelessMixin, QWidget):
     def sync_tray_menu(self):
         self.act_show.setText("Hide overlay window" if self.window_wanted() else "Show overlay window")
         self.act_board.setText("Hide results board" if self.board.pinned else "Show results board (to place it)")
+        self.act_stand.setText("Hide standings board" if self.standings.pinned else "Show standings board (to place it)")
         self.act_prev.setChecked(self.preview)
         for mode, act in self.pic_actions.items():
             act.setChecked(mode == self.picture_mode())
@@ -821,6 +830,8 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.cfg["geometry"] = [g.x(), g.y(), g.width(), g.height()]
         if self.board.isVisible() or self.board.entries:
             self.board.remember()
+        if self.standings.isVisible() or self.standings.entries:
+            self.standings.remember()
         save_config(self.cfg)
         try:
             self.source.stop()
@@ -839,6 +850,8 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.cfg["geometry"] = [g.x(), g.y(), g.width(), g.height()]
         if self.board.isVisible() or self.board.entries:
             self.board.remember()
+        if self.standings.isVisible() or self.standings.entries:
+            self.standings.remember()
         save_config(self.cfg)
         try:
             self.source.stop()
@@ -849,6 +862,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         if self.tray is not None:
             self.tray.hide()
         self.board.close()
+        self.standings.close()
         self.close()
         QApplication.instance().quit()
 
@@ -886,6 +900,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         if key in ("on_top", "title_bar"):
             self.apply_flags()
             self.board.apply_flags()
+            self.standings.apply_flags()
         if key == "max_rows":
             self.fit_to_rows()
         if key == "start_delay" and getattr(self, "source", None) is not None:
@@ -893,6 +908,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         if key == "auto_hide":
             self.sync_window_visibility()
         self.board.update()
+        self.standings.update()
         self.update()
 
     def apply_theme(self, name):
@@ -1073,16 +1089,33 @@ class OverlayWidget(FramelessMixin, QWidget):
 
     # ----- results board ---------------------------------------------------------------
     def on_race_finished(self):
-        """The race is over and every uma has its final place: queue the results board."""
+        """The race is over and every uma has its final place: score it, queue the results board and
+        then the standings board."""
         if self.board_done or not self.horses:
             return
         self.board_done = True
-        if not self.s.get("results_board", True):
-            return
-        # it comes in as the tower goes out, so the two are never both full-size at the same time
-        delay = 1.0 if self.args.hold else max(0.5, float(self.args.hide_after))
+        entries = self.results_entries()
         line1, _line2 = self.course_lines(self.course_info)
-        self.board.present(self.results_entries(), line1, delay)
+        counts = (not self.preview) and bool(getattr(self.source, "counts", True))
+        scoring = bool(self.s.get("scoring", True)) and counts
+        if scoring:
+            named = [e for e in entries if e["h"].trainer.strip()]
+            for e in named:
+                e["pts"] = points_for(e["place"], len(named))
+            if len(named) >= 2:
+                self.book.add_race([{"name": e["h"].trainer, "uma": e["h"].label, "place": e["place"],
+                                     "time": e["time"]} for e in named], title=line1)
+        # the board comes in as the tower goes out, so the two are never both full-size at the same time
+        delay = 1.0 if self.args.hold else max(0.5, float(self.args.hide_after))
+        shown = bool(self.s.get("results_board", True))
+        if shown:
+            self.board.present(entries, line1, delay)
+        if self.s.get("standings_board", True) and counts and not self.args.hold:
+            stay = float(self.s.get("results_seconds", 10.0))
+            if not shown:
+                stay = 0.0
+            if stay > 0 or not shown:
+                self.standings.present(delay=delay + stay + SLIDE_SECONDS + 0.2)
 
     def results_entries(self):
         """Final placings, best first: place (ties share one), finish time and the gap to the winner."""
@@ -1115,6 +1148,14 @@ class OverlayWidget(FramelessMixin, QWidget):
                         "gap": "Winner" if place == 1 else "+%.3f" % (fins[i] - fins[order[0]])})
         return out, self.course_lines(payload["courseInfo"])[0]
 
+    def sample_standings(self):
+        """Made-up scores, to place and style the standings board before any race has been run."""
+        names = ["Trainer %s" % c for c in "ABCDEFGHIJK"]
+        return [{"name": n, "uma": "", "score": 11 - i, "last": 0} for i, n in enumerate(names)]
+
+    def set_standings_pinned(self, on):
+        self.standings.set_pinned(on, self.sample_standings())
+
     def set_board_pinned(self, on):
         """'Show results board': keep it on screen to place it. Shows sample placings if no race ran yet."""
         self.board.set_pinned(on, self.sample_results() if on and not self.board.entries else None)
@@ -1139,6 +1180,8 @@ class OverlayWidget(FramelessMixin, QWidget):
         a3.toggled.connect(self.set_preview)
         m.addAction("Show results board (to place it)" if not self.board.pinned else "Hide results board",
                     lambda: self.set_board_pinned(not self.board.pinned))
+        m.addAction("Show standings board (to place it)" if not self.standings.pinned else "Hide standings board",
+                    lambda: self.set_standings_pinned(not self.standings.pinned))
         m.addSeparator()
         if self.tray_active:
             m.addAction("Hide overlay window", lambda: self.set_overlay_visible(False))

@@ -104,6 +104,9 @@ class SettingsDialog(QDialog):
         self.btn_board = QPushButton("Show results board (to place it)")
         self.btn_board.clicked.connect(lambda: ov.set_board_pinned(not ov.board.pinned))
         mv.addWidget(self.btn_board)
+        self.btn_stand = QPushButton("Show standings board (to place it)")
+        self.btn_stand.clicked.connect(lambda: ov.set_standings_pinned(not ov.standings.pinned))
+        mv.addWidget(self.btn_stand)
         self.note_show = QLabel()
         self.note_show.setWordWrap(True)
         mv.addWidget(self.note_show)
@@ -470,6 +473,8 @@ class SettingsDialog(QDialog):
         ov_l.addWidget(self.otable, 1)
         tabs.addTab(ot, "Outfits")
 
+        self.build_standings_tab(tabs)
+
         # ---- Status tab: checks and the log, so you do not need a terminal
         stt = QWidget()
         sv = QVBoxLayout(stt)
@@ -523,6 +528,175 @@ class SettingsDialog(QDialog):
         sa.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         sa.setWidget(widget)
         return sa
+
+    # ---- standings tab
+    def build_standings_tab(self, tabs):
+        ov, s = self.ov, self.ov.s
+        st = QWidget()
+        v = QVBoxLayout(st)
+        intro = QLabel("After every race each player gets points: <b>1st gets as many points as there are "
+                       "players</b>, the last one gets 1 (10 players: 10, 9, 8 ... 1). The points are added up "
+                       "and the <b>standings board</b> flips through everybody while the next race is set up. "
+                       "In OBS it is its own window: <i>Umamusume Standings (Linux)</i>.")
+        intro.setWordWrap(True)
+        v.addWidget(intro)
+
+        cb1 = QCheckBox("Give points after every race (PTS column on the results board)")
+        cb1.setChecked(bool(s.get("scoring", True)))
+        cb1.toggled.connect(lambda on: ov.set_setting("scoring", on))
+        v.addWidget(cb1)
+        cb2 = QCheckBox("Show the standings board after the results board (stays until the next race)")
+        cb2.setChecked(bool(s.get("standings_board", True)))
+        cb2.toggled.connect(lambda on: ov.set_setting("standings_board", on))
+        v.addWidget(cb2)
+
+        box = QGroupBox("Where do the standings come from?")
+        bl = QVBoxLayout(box)
+        self.cmb_smode = QComboBox()
+        self.cmb_smode.addItem("Counted by this program", "local")
+        self.cmb_smode.addItem("A spreadsheet (link or file)", "sheet")
+        self.cmb_smode.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.cmb_smode.setMinimumContentsLength(10)
+        self.cmb_smode.setCurrentIndex(1 if s.get("standings_mode") == "sheet" else 0)
+        self.cmb_smode.currentIndexChanged.connect(
+            lambda _i: (ov.set_setting("standings_mode", self.cmb_smode.currentData()), ov.standings.refresh(True)))
+        bl.addWidget(self.cmb_smode)
+        bl.addWidget(QLabel("Google Sheet link, or a file:"))
+        row = QHBoxLayout()
+        self.ed_sheet = QLineEdit(s.get("standings_sheet", ""))
+        self.ed_sheet.setPlaceholderText("Google Sheets link or file path")
+        self.ed_sheet.setMinimumWidth(100)
+        self.ed_sheet.editingFinished.connect(self.apply_sheet)
+        row.addWidget(self.ed_sheet)
+        bf = QPushButton("File...")
+        bf.clicked.connect(self.choose_sheet_file)
+        row.addWidget(bf)
+        bl.addLayout(row)
+        note = QLabel("For a Google Sheet: <b>Share</b> &rarr; General access &rarr; <i>Anyone with the link</i> "
+                      "&rarr; Viewer. The link of the tab you want (with <i>gid=</i>) picks that tab. "
+                      "The program only reads it and checks again every minute.")
+        note.setWordWrap(True)
+        bl.addWidget(note)
+        f = QFormLayout()
+        self.ed_tab = QLineEdit(s.get("standings_tab", ""))
+        self.ed_tab.setPlaceholderText("first tab")
+        self.ed_tab.setMinimumWidth(60)
+        self.ed_tab.editingFinished.connect(self.apply_sheet)
+        f.addRow(".xlsx tab name", self.ed_tab)
+        self.ed_cols = {}
+        for key, label, default in (("standings_name_col", "Column with the player", "B"),
+                                    ("standings_score_col", "Column with the points", "D"),
+                                    ("standings_uma_col", "Column with the uma (optional)", "C")):
+            ed = QLineEdit(str(s.get(key, default)))
+            ed.setMaximumWidth(70)
+            ed.editingFinished.connect(self.apply_sheet)
+            self.ed_cols[key] = ed
+            f.addRow(label, ed)
+        self.sp_first = QSpinBox()
+        self.sp_first.setRange(1, 999)
+        self.sp_first.setValue(int(s.get("standings_first_row", 4)))
+        self.sp_first.valueChanged.connect(lambda _v: self.apply_sheet())
+        f.addRow("First row with a player", self.sp_first)
+        bl.addLayout(f)
+        brow = QHBoxLayout()
+        btest = QPushButton("Read the sheet now")
+        btest.clicked.connect(self.apply_sheet)
+        brow.addWidget(btest)
+        brow.addStretch(1)
+        bl.addLayout(brow)
+        self.lbl_sheet = QLabel("")
+        self.lbl_sheet.setWordWrap(True)
+        bl.addWidget(self.lbl_sheet)
+        v.addWidget(box)
+
+        lbox = QGroupBox("Look")
+        lf = QFormLayout(lbox)
+        ed_title = QLineEdit(s.get("standings_title", "STANDINGS"))
+        ed_title.setPlaceholderText("STANDINGS")
+        ed_title.editingFinished.connect(lambda: ov.set_setting("standings_title", ed_title.text().strip() or "STANDINGS"))
+        lf.addRow("Title", ed_title)
+        sp_rows = QSpinBox()
+        sp_rows.setRange(3, 20)
+        sp_rows.setSuffix(" players")
+        sp_rows.setValue(int(s.get("standings_rows", 8)))
+        sp_rows.valueChanged.connect(lambda x: (ov.set_setting("standings_rows", int(x)), ov.standings.refresh(False)))
+        lf.addRow("Per page", sp_rows)
+        sp_page = QDoubleSpinBox()
+        sp_page.setRange(2.0, 60.0)
+        sp_page.setDecimals(0)
+        sp_page.setSuffix(" seconds")
+        sp_page.setValue(float(s.get("standings_page_seconds", 6.0)))
+        sp_page.valueChanged.connect(lambda x: ov.set_setting("standings_page_seconds", float(x)))
+        lf.addRow("Next page after", sp_page)
+        v.addWidget(lbox)
+
+        sbox = QGroupBox("Points counted by this program")
+        sl = QVBoxLayout(sbox)
+        self.lbl_book = QLabel()
+        sl.addWidget(self.lbl_book)
+        r2 = QHBoxLayout()
+        b_undo = QPushButton("Undo last race")
+        b_undo.clicked.connect(self.undo_race)
+        b_exp = QPushButton("Save as .csv...")
+        b_exp.clicked.connect(self.export_scores)
+        b_clr = QPushButton("New bracket")
+        b_clr.clicked.connect(self.clear_scores)
+        b_clr.setToolTip("Delete all counted points and start again")
+        for b in (b_undo, b_exp, b_clr):
+            b.setMinimumWidth(10)
+            r2.addWidget(b)
+        sl.addLayout(r2)
+        pn = QLabel("<i>Players are matched by trainer name. Replays, previews and old race files "
+                    "never give points, and the same race is never counted twice.</i>")
+        pn.setWordWrap(True)
+        sl.addWidget(pn)
+        v.addWidget(sbox)
+        v.addStretch(1)
+        self._stand_tab = st
+        self.update_book_label()
+        tabs.addTab(self.scrolled(st), "Standings")
+
+    def apply_sheet(self):
+        ov = self.ov
+        ov.s["standings_sheet"] = self.ed_sheet.text().strip()
+        ov.s["standings_tab"] = self.ed_tab.text().strip()
+        for k, ed in self.ed_cols.items():
+            ov.s[k] = ed.text().strip().upper()
+        ov.s["standings_first_row"] = int(self.sp_first.value())
+        ov.save_settings()
+        if ov.s.get("standings_mode") != "sheet":
+            self.cmb_smode.setCurrentIndex(1)        # reading a sheet only makes sense in sheet mode
+        ov.standings.refresh(True)
+        self.lbl_sheet.setText("Reading...")
+
+    def choose_sheet_file(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Choose the score file", os.path.expanduser("~"),
+                                              "Score files (*.csv *.xlsx *.xlsm);;All files (*)")
+        if path:
+            self.ed_sheet.setText(path)
+            self.apply_sheet()
+
+    def update_book_label(self):
+        b = self.ov.book
+        self.lbl_book.setText("%d race%s scored, %d players." % (len(b.races), "" if len(b.races) == 1 else "s",
+                                                               len(b.totals())))
+
+    def undo_race(self):
+        self.ov.book.undo_last()
+        self.ov.standings.refresh(True)
+        self.update_book_label()
+
+    def export_scores(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Save the points", os.path.expanduser("~/standings.csv"), "CSV (*.csv)")
+        if path:
+            self.ov.book.export_csv(path)
+
+    def clear_scores(self):
+        if QMessageBox.question(self, "New bracket", "Delete all counted points and start again?") == \
+                QMessageBox.StandardButton.Yes:
+            self.ov.book.clear()
+            self.ov.standings.refresh(True)
+            self.update_book_label()
 
     # ---- races tab
     def races_folder(self):
@@ -784,6 +958,11 @@ class SettingsDialog(QDialog):
         self.btn_prev2.setText("Stop preview" if ov.preview else "Show preview race")
         self.btn_board.setText("Done placing: hide the results board" if ov.board.pinned
                                else "Show results board (to place it)")
+        self.btn_stand.setText("Done placing: hide the standings board" if ov.standings.pinned
+                               else "Show standings board (to place it)")
+        if self.isVisible() and self._tabs.currentWidget() is self._stand_tab:
+            self.lbl_sheet.setText(ov.standings.status or "")
+            self.update_book_label()
         self.cb_prev.blockSignals(True)
         self.cb_prev.setChecked(self.ov.preview)
         self.cb_prev.blockSignals(False)

@@ -32,6 +32,7 @@ class SseThread(QThread):
         self.game_match = game_match
         self.quit_with_game = quit_with_game
         self.offset = 0.0  # unused in live mode (the real game clock is used)
+        self.counts = True   # races from this source give points
         self._stop = False
         self._last_result_raw = ""
 
@@ -205,6 +206,7 @@ class ReplayBase(QThread):
         self.speed = speed
         self.offset = 0.0     # sync nudge in seconds (arrow keys in the window change it)
         self.delay = 0.0      # saved races only: seconds from "file saved" to "gates open"
+        self.counts = True    # does the race that plays now give points? (not for demos / old files)
         self._stop = False
 
     def stop(self):
@@ -249,6 +251,7 @@ class DemoThread(ReplayBase):
     def __init__(self, path, speed=1.0):
         super().__init__(speed)
         self.path = path
+        self.counts = False
 
     def run(self):
         payload, rmap = payload_from_saved_race(self.path)
@@ -401,6 +404,7 @@ class WatchThread(ReplayBase):
                 age = time.time() - n[1]
                 fresh = (not startup) and age < 30
                 self._say("Playing: %s" % os.path.basename(n[0]))
+                self.counts = fresh          # a file that was already there at the start is not a new race
                 self.play(payload, rmap,
                           interrupt=lambda: (self._key(self.newest()) != self.last_key
                                              or bool(self.game_match and not process_running(self.game_match))),

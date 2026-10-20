@@ -7,6 +7,7 @@ import os
 APP_NAME = "Umamusume Race Overlay (Linux)"
 
 
+STANDINGS_NAME = "Umamusume Standings (Linux)"     # window name of the standings board (pick it in OBS)
 RESULTS_NAME = "Umamusume Race Results (Linux)"   # window name of the results board (pick it in OBS)
 
 
@@ -92,11 +93,28 @@ DEFAULT_SETTINGS = {
     # --- results board (the window that shows after the race)
     "results_board": True,     # show the results board after each race
     "results_seconds": 10.0,   # how long it stays (0 = until the next race starts)
+    # --- points and standings board (Standings tab)
+    "scoring": True,           # give points after every race: 1st = number of players, last = 1
+    "standings_board": True,   # show the standings board after the results board, until the next race
+    "standings_mode": "local", # "local" = points counted by this program, "sheet" = read from a sheet
+    "standings_sheet": "",     # Google Sheets link, or a .csv / .xlsx file
+    "standings_tab": "",       # .xlsx only: name of the sheet tab ("" = the first one)
+    "standings_name_col": "B", # sheet columns (letters) and the first row with a player
+    "standings_score_col": "D",
+    "standings_uma_col": "C",
+    "standings_first_row": 4,
+    "standings_title": "STANDINGS",
+    "standings_rows": 8,       # players per page
+    "standings_page_seconds": 6.0,   # time per page while it cycles through everybody
+    "standings_refresh": 60,   # sheet: seconds between reloads
 }
 
 
 KEEP_ON_RESET = ("source", "saved_races_dir", "watch_subfolders", "start_delay", "auto_hide",
-                 "update_url", "open_menu", "show_overlay", "results_board", "results_seconds", "default_faces")
+                 "update_url", "open_menu", "show_overlay", "results_board", "results_seconds", "default_faces",
+                 "scoring", "standings_board", "standings_mode", "standings_sheet", "standings_tab",
+                 "standings_name_col", "standings_score_col", "standings_uma_col", "standings_first_row",
+                 "standings_title", "standings_rows", "standings_page_seconds", "standings_refresh")
 
 
 # Colour sets for the Look tab. Each one only changes colours.

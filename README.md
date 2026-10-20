@@ -29,6 +29,7 @@
 - [Saved races folder](#-saved-races-folder)
 - [Hidden until the race, slide-in](#-hidden-until-the-race-slide-in)
 - [Results board](#-results-board)
+- [Points and standings](#-points-and-standings)
 - [Tower options](#-tower-options)
 - [Alternative outfits](#-alternative-outfits)
 - [Wayland](#-wayland)
@@ -54,6 +55,7 @@
 - 🌙 **Dark settings window** with a pink, yellow and mint theme (new in 1.1.0)
 - 📂 **Saved races folder:** pick the folder in Settings; the folders inside it (Career, Room match, ...) are searched too (new in 1.1.0)
 - 🏁 **Results board:** after the race a second window shows the final places in two columns, like a TV results graphic, with finish times, the gap to the winner and the track name (new in 1.4.0)
+- 🏆 **Points and standings board:** every race gives points (1st = number of players, last = 1), added up and shown page by page while the next race is set up. It can also read your own Google Sheet (new in 1.6.0)
 - ▲▼ **Position arrows:** a small green / red arrow when a uma gains or loses a place (new in 1.4.0)
 - 📏 **Auto size:** the window follows the number of umas, and shrinks to fit your screen when 18 umas are too tall; optionally show only the top N rows (new in 1.4.0)
 - 🎨 **Colour sets:** Midnight, Charcoal and gold, Sakura, Mint, Daylight and High contrast in one click (new in 1.4.0)
@@ -363,13 +365,28 @@ It only shows information. It is not a command line, and it does not change anyt
 
 ---
 
+## 🏆 Points and standings
+
+<div align="center">
+<img src=".github/docs/results-board-points.png" alt="Results board with points" width="520">
+<img src=".github/docs/standings-board.png" alt="Standings board" width="300">
+</div>
+
+After every race each trainer gets points, like stage points in NASCAR: **1st gets as many points as there are players, the last gets 1** (10 players: 10, 9, 8 ... 1; players that tie get the same points). The results board shows them in a **PTS** column, and the **standings board** (its own window: **Umamusume Standings (Linux)**) comes in afterwards and stays until the next race starts. With more players than fit on one page it flips through everybody.
+
+In the **Standings** tab you choose where the numbers come from:
+
+- **Counted by this program:** every race you play with it is scored and saved (`scores.json` in the settings folder). *Undo last race*, *Save as .csv* and *New bracket* are there too. Preview races, replays and old race files never give points, and the same race is never counted twice. Players are matched by trainer name.
+- **A spreadsheet:** paste a Google Sheets link (Share -> *Anyone with the link* -> Viewer; the link of the tab you want picks that tab) or choose a `.csv` / `.xlsx` file. Set the columns (player, points, optional uma) and the first row. It is reloaded every minute and only read, never changed.
+
+Use *Show standings board (to place it)* in the Menu to put the window where you want it on the stream.
+
 ## 🗺️ Roadmap
 
 Planned, not released yet:
 
 - [x] ~~**NASCAR style overlay:** full results board when the race finishes~~ (done in 1.4.0: the results board; *Rows in the tower* gives the short top-N tower)
 - [ ] **Corner overlay:** a dedicated small top ~5 view during the race that grows into the results board
-- [ ] **Standings board:** show every player's score after a bracket, read from a `.xlsx` / `.csv` file (or a published Google Sheets CSV link), reloaded automatically when the file changes
 
 ---
 
