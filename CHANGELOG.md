@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.0
+
+- **New:** **round views** for the standings board: *Round 1*, *Round 2*, *Round 3*, *Rounds 1 + 2* and *Rounds 1 + 2 + 3*. Set them up in the Standings tab (Rounds section) and switch while streaming: right click the standings board or use the tray menu, *Standings view*.
+- **New:** the standings rows are coloured **gold / silver / bronze** in blocks (the first 5 gold, the next 5 silver, the next 5 bronze). The block size can be changed or switched off in the Standings tab.
+- **Note:** old settings keep working. Round views read your *Final Rankings Calc* tab by default (player in column A, rounds in B, C, D, first row 3).
+
 ## 1.6.1
 
 - **Better:** the standings are numbered 1, 2, 3 ... without repeats, even when players have the same points (they keep the order of the sheet).

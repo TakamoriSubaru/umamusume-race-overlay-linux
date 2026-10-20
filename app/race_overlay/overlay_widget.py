@@ -773,6 +773,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.act_prev.setCheckable(True)
         self.act_prev.triggered.connect(lambda on: self.set_preview(on))
         self.pic_actions = self.add_pictures_menu(m)
+        self.view_menu_actions = self.add_view_menu(m)
         self.act_top = m.addAction("Always on top")
         self.act_top.setCheckable(True)
         self.act_top.triggered.connect(lambda on: self.set_setting("on_top", on))
@@ -803,6 +804,8 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.act_prev.setChecked(self.preview)
         for mode, act in self.pic_actions.items():
             act.setChecked(mode == self.picture_mode())
+        for key, act in self.view_menu_actions.items():
+            act.setChecked(key == self.s.get("standings_view", "plain"))
         self.act_top.setChecked(bool(self.s.get("on_top", True)))
 
     def status_summary(self):
@@ -889,6 +892,30 @@ class OverlayWidget(FramelessMixin, QWidget):
             a.triggered.connect(lambda _=False, md=mode: self.set_setting("pictures", md))
             acts[mode] = a
         return acts
+
+    def add_view_menu(self, menu):
+        """'Standings view' submenu: Round 1, Round 2, Round 3, 1 + 2, 1 + 2 + 3. Returns {view: action}."""
+        from PyQt6.QtGui import QActionGroup
+        from .sheets import VIEWS
+        sub = menu.addMenu("Standings view (sheet)")
+        group = QActionGroup(sub)
+        group.setExclusive(True)
+        acts = {}
+        for key, text in VIEWS:
+            a = sub.addAction(text)
+            a.setCheckable(True)
+            a.setChecked(key == self.s.get("standings_view", "plain"))
+            group.addAction(a)
+            a.triggered.connect(lambda _=False, k=key: self.set_standings_view(k))
+            acts[key] = a
+        return acts
+
+    def set_standings_view(self, key):
+        self.set_setting("standings_view", key)
+        if self.s.get("standings_mode") != "sheet":
+            self.set_setting("standings_mode", "sheet")
+        self.standings.refresh(True)      # reads the table this view needs (a cached one is used at once)
+        self.standings.apply_raw()
 
     def cycle_pictures(self):
         order = [m for m, _ in self.PICTURE_CHOICES]
@@ -1182,6 +1209,7 @@ class OverlayWidget(FramelessMixin, QWidget):
                     lambda: self.set_board_pinned(not self.board.pinned))
         m.addAction("Show standings board (to place it)" if not self.standings.pinned else "Hide standings board",
                     lambda: self.set_standings_pinned(not self.standings.pinned))
+        self.add_view_menu(m)
         m.addSeparator()
         if self.tray_active:
             m.addAction("Hide overlay window", lambda: self.set_overlay_visible(False))

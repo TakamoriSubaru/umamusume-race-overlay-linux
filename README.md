@@ -379,6 +379,10 @@ In the **Standings** tab you choose where the numbers come from:
 - **Counted by this program:** every race you play with it is scored and saved (`scores.json` in the settings folder). *Undo last race*, *Save as .csv* and *New bracket* are there too. Preview races, replays and old race files never give points, and the same race is never counted twice. Players are matched by trainer name.
 - **A spreadsheet:** paste a Google Sheets link (Share -> *Anyone with the link* -> Viewer; the link of the tab you want picks that tab) or choose a `.csv` / `.xlsx` file. Set the columns (player, points, optional uma) and the first row. It is reloaded every minute and only read, never changed.
 
+**Rounds:** in the Standings tab (Rounds section) choose *Round 1*, *Round 2*, *Round 3*, *Rounds 1 + 2* or *Rounds 1 + 2 + 3*. It reads a table with one name column and one points column per round (by default the *Final Rankings Calc* tab: player in A, rounds in B, C, D, first row 3). For a Google Sheet, paste that tab's link in *Link of the rounds tab*. While streaming, switch with a right click on the standings board or in the tray menu (*Standings view*).
+
+The rows are coloured gold, silver and bronze in blocks of 5 players (changeable in the Standings tab).
+
 Use *Show standings board (to place it)* in the Menu to put the window where you want it on the stream.
 
 ## 🗺️ Roadmap

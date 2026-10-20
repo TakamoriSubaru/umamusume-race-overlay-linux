@@ -50,6 +50,7 @@ from .updater import (
     read_update_file,
     version_tuple,
 )
+from .sheets import VIEWS
 from .images import find_file_ci
 from .util import open_folder
 
@@ -609,12 +610,62 @@ class SettingsDialog(QDialog):
         bl.addWidget(self.lbl_sheet)
         v.addWidget(box)
 
+        rbox = QGroupBox("Rounds (sheet)")
+        rl = QVBoxLayout(rbox)
+        rn = QLabel("Show one round or add rounds up. Needs a table with one name column and one points column "
+                    "per round (your <i>Final Rankings Calc</i> tab). You can also switch while streaming: right "
+                    "click the standings board or use the tray menu, <i>Standings view</i>.")
+        rn.setWordWrap(True)
+        rl.addWidget(rn)
+        rf = QFormLayout()
+        self.cmb_view = QComboBox()
+        for key, text in VIEWS:
+            self.cmb_view.addItem(text if key != "plain" else "Points column from above (no rounds)", key)
+        self.cmb_view.setCurrentIndex(max(0, self.cmb_view.findData(s.get("standings_view", "plain"))))
+        self.cmb_view.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.cmb_view.setMinimumContentsLength(10)
+        self.cmb_view.currentIndexChanged.connect(lambda _i: self.apply_view())
+        rf.addRow("Show", self.cmb_view)
+        self.ed_rsheet = QLineEdit(s.get("standings_rounds_sheet", ""))
+        self.ed_rsheet.setPlaceholderText("empty = same link / file as above")
+        self.ed_rsheet.setMinimumWidth(60)
+        self.ed_rsheet.editingFinished.connect(self.apply_rounds)
+        rf.addRow("Link of the rounds tab", self.ed_rsheet)
+        self.ed_rtab = QLineEdit(s.get("standings_rounds_tab", "Final Rankings Calc"))
+        self.ed_rtab.setMinimumWidth(60)
+        self.ed_rtab.editingFinished.connect(self.apply_rounds)
+        rf.addRow(".xlsx tab name", self.ed_rtab)
+        self.ed_rname = QLineEdit(str(s.get("standings_rounds_name_col", "A")))
+        self.ed_rname.setMaximumWidth(70)
+        self.ed_rname.editingFinished.connect(self.apply_rounds)
+        rf.addRow("Column with the player", self.ed_rname)
+        self.ed_rcols = QLineEdit(str(s.get("standings_round_cols", "B,C,D")))
+        self.ed_rcols.setMaximumWidth(110)
+        self.ed_rcols.setToolTip("One letter per round, for example B,C,D")
+        self.ed_rcols.editingFinished.connect(self.apply_rounds)
+        rf.addRow("Columns of round 1, 2, 3", self.ed_rcols)
+        self.sp_rfirst = QSpinBox()
+        self.sp_rfirst.setRange(1, 999)
+        self.sp_rfirst.setValue(int(s.get("standings_rounds_first_row", 3)))
+        self.sp_rfirst.valueChanged.connect(lambda _v: self.apply_rounds())
+        rf.addRow("First row with a player", self.sp_rfirst)
+        rl.addLayout(rf)
+        v.addWidget(rbox)
+
         lbox = QGroupBox("Look")
         lf = QFormLayout(lbox)
         ed_title = QLineEdit(s.get("standings_title", "STANDINGS"))
         ed_title.setPlaceholderText("STANDINGS")
         ed_title.editingFinished.connect(lambda: ov.set_setting("standings_title", ed_title.text().strip() or "STANDINGS"))
         lf.addRow("Title", ed_title)
+        sp_hl = QSpinBox()
+        sp_hl.setRange(0, 20)
+        sp_hl.setSpecialValueText("Off")
+        sp_hl.setSuffix(" players per colour")
+        sp_hl.setValue(int(s.get("standings_highlight", 5)))
+        sp_hl.setToolTip("The first block is gold, the next silver, the next bronze.")
+        sp_hl.valueChanged.connect(lambda x: ov.set_setting("standings_highlight", int(x)))
+        lf.addRow("Gold / silver / bronze", sp_hl)
         sp_rows = QSpinBox()
         sp_rows.setRange(3, 20)
         sp_rows.setSuffix(" players")
@@ -667,6 +718,25 @@ class SettingsDialog(QDialog):
         if ov.s.get("standings_mode") != "sheet":
             self.cmb_smode.setCurrentIndex(1)        # reading a sheet only makes sense in sheet mode
         ov.standings.refresh(True)
+        self.lbl_sheet.setText("Reading...")
+
+    def apply_view(self):
+        self.ov.set_standings_view(self.cmb_view.currentData())
+        self.cmb_smode.blockSignals(True)
+        self.cmb_smode.setCurrentIndex(1)
+        self.cmb_smode.blockSignals(False)
+        self.lbl_sheet.setText("Reading...")
+
+    def apply_rounds(self):
+        ov = self.ov
+        ov.s["standings_rounds_sheet"] = self.ed_rsheet.text().strip()
+        ov.s["standings_rounds_tab"] = self.ed_rtab.text().strip()
+        ov.s["standings_rounds_name_col"] = self.ed_rname.text().strip().upper()
+        ov.s["standings_round_cols"] = self.ed_rcols.text().strip().upper()
+        ov.s["standings_rounds_first_row"] = int(self.sp_rfirst.value())
+        ov.save_settings()
+        ov.standings.refresh(True)
+        ov.standings.apply_raw()
         self.lbl_sheet.setText("Reading...")
 
     def choose_sheet_file(self):

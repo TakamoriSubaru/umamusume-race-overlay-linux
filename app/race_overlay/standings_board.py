@@ -4,18 +4,22 @@ stays while the next race is being set up, flipping through all the players. In 
 
 import math
 import time
-from PyQt6.QtCore import QRectF, Qt
+from PyQt6.QtCore import QRectF, QTimer, Qt
 from PyQt6.QtGui import QColor, QFontMetrics, QPainterPath
+from PyQt6.QtWidgets import QMenu
 
 from .constants import PODIUM, STANDINGS_NAME
 from .frameless import fit_window
 from .results_board import FOOT_H, PAD, SUB_H, TOP_H, ResultsBoard
 from .scoring import rank_rows
-from .sheets import load_rows, read_standings
+from .sheets import load_rows, read_rounds, read_standings, view_title
 from .updater import Job
 
 ROW_H = 38
 COL_W = 330
+TIERS = ("#f2c200", "#c9c9cf", "#e6b88a")       # top block, second block, third block
+TIER_TEXT = "#1d1d26"
+TIER_SUB = "#4a4a58"
 FADE = 0.3       # seconds a new page takes to fade in
 
 
@@ -32,6 +36,9 @@ class StandingsBoard(ResultsBoard):
         self.status = ""          # sheet problems, shown in Settings
         self.loaded_at = 0.0
         self.job = None
+        self.raw_src = None
+        self._again = False
+        self.raw = None           # the table last read from the sheet (rows of text)
         self.cols = 1
         self.col_w = COL_W
 
@@ -76,30 +83,68 @@ class StandingsBoard(ResultsBoard):
             return
         s = self.ov.s
         if self.job is not None and self.job.isRunning():
+            self._again = self._again or force      # run once more when this one is done
             return
         if not force and time.monotonic() - self.loaded_at < max(15, float(s.get("standings_refresh", 60))):
             return
         self.loaded_at = time.monotonic()
-        src, tab = s.get("standings_sheet", ""), s.get("standings_tab", "")
-        cols = (s.get("standings_name_col", "B"), s.get("standings_score_col", "D"),
-                s.get("standings_uma_col", "C"), s.get("standings_first_row", 4))
-        self.job = Job(lambda: read_standings(load_rows(src, tab), *cols))
-        self.job.done.connect(self._sheet_ok)
+        src, tab = self.view_source()
+        self.job = Job(lambda: load_rows(src, tab))
+        self.job.done.connect(lambda table, k=(src, tab): self._sheet_ok(table, k))
         self.job.failed.connect(self._sheet_fail)
         self.job.start()
 
-    def _sheet_ok(self, rows):
-        self.status = "OK: %d players read from the sheet." % len(rows) if rows else \
+    def view_source(self):
+        """(link or file, tab) to read for the chosen view."""
+        s = self.ov.s
+        if s.get("standings_view", "plain") == "plain":
+            return s.get("standings_sheet", ""), s.get("standings_tab", "")
+        own = (s.get("standings_rounds_sheet") or "").strip()
+        if own:
+            return own, s.get("standings_rounds_tab", "")
+        return s.get("standings_sheet", ""), s.get("standings_rounds_tab", "")
+
+    def _sheet_ok(self, table, key):
+        self.raw = table
+        self.raw_src = key
+        self.apply_raw()
+        self._after_job()
+
+    def _after_job(self):
+        if self._again:
+            self._again = False
+            QTimer.singleShot(0, lambda: self.refresh(True))
+
+    def apply_raw(self):
+        """Pick the players and points out of the table for the chosen view (also when you change the view)."""
+        if self.raw is None or self.raw_src != self.view_source():
+            return                        # the table on hand is not the one this view needs
+        s = self.ov.s
+        view = s.get("standings_view", "plain")
+        try:
+            if view == "plain":
+                rows = read_standings(self.raw, s.get("standings_name_col", "B"), s.get("standings_score_col", "D"),
+                                      s.get("standings_uma_col", "C"), s.get("standings_first_row", 4))
+            else:
+                rows = read_rounds(self.raw, s.get("standings_rounds_name_col", "A"),
+                                   s.get("standings_round_cols", "B,C,D"), view,
+                                   s.get("standings_rounds_first_row", 3))
+        except ValueError as e:
+            self.status = str(e)
+            return
+        self.status = ("OK: %d players read from the sheet." % len(rows)) if rows else \
             "The sheet was read but no player rows were found. Check the columns and first row."
         if rows:
             self.set_rows(rows)
 
     def _sheet_fail(self, msg):
         self.status = "Could not read the sheet: " + msg    # the last good list stays on screen
+        self._after_job()
 
     def auto_footer(self):
         if self.use_sheet():
-            return "FROM THE SHEET"
+            v = view_title(self.ov.s.get("standings_view", "plain"))
+            return v.upper() if v and self.ov.s.get("standings_view") != "plain" else "FROM THE SHEET"
         n = len(getattr(self.ov, "book", None).races) if getattr(self.ov, "book", None) else 0
         return "%d RACE%s SCORED" % (n, "" if n == 1 else "S")
 
@@ -158,22 +203,19 @@ class StandingsBoard(ResultsBoard):
         ov = self.ov
         rank = row["rank"]
         rh = ROW_H - 4
-        podium = QColor(PODIUM[rank - 1]) if rank <= 3 else None
+        block = int(ov.s.get("standings_highlight", 5) or 0)
+        tier = (rank - 1) // block if block > 0 else 9
         path = QPainterPath()
         path.addRoundedRect(QRectF(x, y, COL_W, rh), 6, 6)
-        bg = QColor(tc)
-        bg.setAlpha(20)
-        p.fillPath(path, bg)
-        if rank == 1:
-            win = QColor(ac)
-            win.setAlpha(40)
-            p.fillPath(path, win)
-        if podium is not None:
-            strip = QPainterPath()
-            strip.addRoundedRect(QRectF(x, y + 5, 3.5, rh - 10), 1.75, 1.75)
-            p.fillPath(strip, podium)
+        if tier < 3:                      # gold / silver / bronze rows, like the sheet
+            p.fillPath(path, QColor(TIERS[tier]))
+            tc, sc, ac = QColor(TIER_TEXT), QColor(TIER_SUB), QColor(TIER_TEXT)
+        else:
+            bg = QColor(tc)
+            bg.setAlpha(20)
+            p.fillPath(path, bg)
         p.setFont(ov.fnt(16, True))
-        p.setPen(podium if podium is not None else tc)
+        p.setPen(tc)
         p.drawText(QRectF(x + 8, y, 34, rh), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, "%d." % rank)
         score_w = 84
         name_w = COL_W - 46 - score_w - 6
@@ -191,7 +233,7 @@ class StandingsBoard(ResultsBoard):
             p.drawText(QRectF(x + 46, y + 21, name_w, 13), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                        QFontMetrics(nf).elidedText(uma, Qt.TextElideMode.ElideRight, int(name_w)))
         p.setFont(ov.fnt(18, True, mono=True))
-        p.setPen(ac if rank == 1 else tc)
+        p.setPen(tc)
         score = row["score"]
         text = ("%g" % score) if isinstance(score, float) else str(score)
         has_last = row.get("last", 0) > 0
@@ -202,6 +244,13 @@ class StandingsBoard(ResultsBoard):
             p.setPen(ac)
             p.drawText(QRectF(x + COL_W - score_w - 8, y + 21, score_w, 13),
                        Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, "+%d" % row["last"])
+
+    def contextMenuEvent(self, ev):
+        m = QMenu(self)
+        m.addAction("Settings...", self.ov.open_settings)
+        self.ov.add_view_menu(m)
+        m.addAction("Hide the standings board", lambda: self.hide_now())
+        m.exec(ev.globalPos())
 
     def draw_title(self, p, lw, tc, ac):
         self.TITLE_TEXT = (self.ov.s.get("standings_title") or "STANDINGS").upper()

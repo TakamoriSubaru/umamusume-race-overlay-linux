@@ -112,6 +112,38 @@ def to_number(text):
     return int(v) if v == int(v) else v
 
 
+VIEWS = (("plain", "Points column"), ("r1", "Round 1"), ("r2", "Round 2"), ("r3", "Round 3"),
+         ("r12", "Rounds 1 + 2"), ("r123", "Rounds 1 + 2 + 3"))
+VIEW_PICKS = {"r1": (0,), "r2": (1,), "r3": (2,), "r12": (0, 1), "r123": (0, 1, 2)}
+
+
+def view_title(view):
+    return dict(VIEWS).get(view, "")
+
+
+def read_rounds(rows, name_col, round_cols, view, first_row=3):
+    """One name column and one points column per round (for example the "Final Rankings Calc" tab).
+    `view` picks which rounds are added up: r1, r2, r3, r12 or r123."""
+    ni = col_index(name_col)
+    cols = [col_index(c) for c in str(round_cols).replace(";", ",").split(",") if c.strip()]
+    picks = VIEW_PICKS.get(view)
+    if ni is None or not picks or any(c is None for c in cols) or max(picks) >= len(cols):
+        raise ValueError("Round columns must look like B,C,D (one letter per round).")
+    out, started = [], False
+    for r in rows[max(0, int(first_row) - 1):]:
+        name = r[ni].strip() if ni < len(r) else ""
+        vals = [to_number(r[cols[i]]) if cols[i] < len(r) else None for i in picks]
+        if not name and all(v is None for v in vals):
+            if started:
+                break
+            continue
+        if not name or all(v is None for v in vals):
+            continue
+        started = True
+        out.append({"name": name, "uma": "", "score": sum(v for v in vals if v is not None), "races": 0, "last": 0})
+    return rank_rows(out)
+
+
 def read_standings(rows, name_col="B", score_col="D", uma_col="C", first_row=4):
     """Pick the player / score columns out of the table. Rows without a name or without a number are skipped
     (headers, empty lines, notes). Reading stops at the first fully empty row after the list started."""

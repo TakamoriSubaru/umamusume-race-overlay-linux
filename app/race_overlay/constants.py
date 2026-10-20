@@ -103,6 +103,13 @@ DEFAULT_SETTINGS = {
     "standings_score_col": "D",
     "standings_uma_col": "C",
     "standings_first_row": 4,
+    "standings_view": "plain", # sheet: "plain" = the points column, or r1 / r2 / r3 / r12 / r123 (rounds added up)
+    "standings_round_cols": "B,C,D",   # round views: the columns of round 1, 2 and 3
+    "standings_rounds_sheet": "",       # round views: link / file of the table with all rounds ("" = same as above)
+    "standings_rounds_tab": "Final Rankings Calc",   # round views, .xlsx only: tab name
+    "standings_rounds_name_col": "A",   # round views: column with the player and the first row
+    "standings_rounds_first_row": 3,
+    "standings_highlight": 5,  # colour the top 5 gold, the next 5 silver, the next 5 bronze (0 = off)
     "standings_title": "STANDINGS",
     "standings_rows": 8,       # players per page
     "standings_page_seconds": 6.0,   # time per page while it cycles through everybody
@@ -114,6 +121,8 @@ KEEP_ON_RESET = ("source", "saved_races_dir", "watch_subfolders", "start_delay",
                  "update_url", "open_menu", "show_overlay", "results_board", "results_seconds", "default_faces",
                  "scoring", "standings_board", "standings_mode", "standings_sheet", "standings_tab",
                  "standings_name_col", "standings_score_col", "standings_uma_col", "standings_first_row",
+                 "standings_view", "standings_round_cols", "standings_rounds_sheet", "standings_rounds_tab",
+                 "standings_rounds_name_col", "standings_rounds_first_row", "standings_highlight",
                  "standings_title", "standings_rows", "standings_page_seconds", "standings_refresh")
 
 
