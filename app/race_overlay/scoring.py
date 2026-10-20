@@ -28,14 +28,11 @@ def norm_name(name):
 
 
 def rank_rows(rows):
-    """rows: dicts with 'score'. Adds 'rank' (ties share a place: 1, 2, 2, 4) and sorts best first."""
-    rows = sorted(rows, key=lambda r: (-r["score"], norm_name(r["name"])))
-    prev, rank = None, 0
+    """rows: dicts with 'score'. Sorts best first and numbers them 1, 2, 3 ... (equal points keep the
+    order they came in, so the numbers never repeat)."""
+    rows = sorted(rows, key=lambda r: -r["score"])
     for i, r in enumerate(rows):
-        if prev is None or r["score"] != prev:
-            rank = i + 1
-        r["rank"] = rank
-        prev = r["score"]
+        r["rank"] = i + 1
     return rows
 
 

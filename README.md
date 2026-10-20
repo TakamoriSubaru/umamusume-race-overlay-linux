@@ -372,7 +372,7 @@ It only shows information. It is not a command line, and it does not change anyt
 <img src=".github/docs/standings-board.png" alt="Standings board" width="300">
 </div>
 
-After every race each trainer gets points, like stage points in NASCAR: **1st gets as many points as there are players, the last gets 1** (10 players: 10, 9, 8 ... 1; players that tie get the same points). The results board shows them in a **PTS** column, and the **standings board** (its own window: **Umamusume Standings (Linux)**) comes in afterwards and stays until the next race starts. With more players than fit on one page it flips through everybody.
+After every race each trainer gets points, like stage points in NASCAR: **1st gets as many points as there are players, the last gets 1** (10 players: 10, 9, 8 ... 1; players that tie get the same points; the standings list is numbered 1, 2, 3 ... without repeats). The results board shows them in a **PTS** column, and the **standings board** (its own window: **Umamusume Standings (Linux)**) comes in afterwards and stays until the next race starts. With more players than fit on one page it flips through everybody.
 
 In the **Standings** tab you choose where the numbers come from:
 

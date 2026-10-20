@@ -5,6 +5,7 @@
 - **New:** **points after every race**: 1st gets as many points as there are players, the last gets 1 (ties share). The results board has a new **PTS** column.
 - **New:** **standings board**, its own window (*Umamusume Standings (Linux)*). It shows everybody's points and flips through the pages while the next race is set up, and goes away when it starts.
 - **New:** **Standings tab**: use the points counted by the program (undo, save as .csv, new bracket) or read a **Google Sheet** link / `.csv` / `.xlsx` (choose the columns, reloaded every minute).
+- **Numbering:** the standings are numbered 1, 2, 3 ... without repeats, even when players have the same points (they keep the order of the sheet).
 - **Note:** copy the whole folder when you install this version: it adds `scoring.py`, `sheets.py` and `standings_board.py` in `race_overlay/`. The updater accepts them. Old settings keep working.
 
 ## 1.5.4
