@@ -67,6 +67,7 @@ DEFAULT_SETTINGS = {
     "on_top": True,            # keep the overlay above other windows
     "title_bar": False,        # False = clean window without the title bar
     "show_overlay": False,     # is the overlay window shown? (remembered between starts)
+    "stop_server": True,       # quitting the overlay also closes the Race Overlay server the start script started
     "open_menu": True,         # open the Menu window when the program starts
     "update_url": "https://github.com/TakamoriSubaru/umamusume-race-overlay-linux/releases/latest/download/latest.json",  # "Check online" link
     "default_faces": True,     # use the faces found in Race Overlay when you have not chosen a picture
@@ -103,13 +104,12 @@ DEFAULT_SETTINGS = {
     "standings_score_col": "D",
     "standings_uma_col": "C",
     "standings_first_row": 4,
-    "standings_view": "plain", # sheet: "plain" = the points column, or r1 / r2 / r3 / r12 / r123 (rounds added up)
-    "standings_round_cols": "B,C,D",   # round views: the columns of round 1, 2 and 3
-    "standings_rounds_sheet": "",       # round views: link / file of the table with all rounds ("" = same as above)
-    "standings_rounds_tab": "Final Rankings Calc",   # round views, .xlsx only: tab name
-    "standings_rounds_name_col": "A",   # round views: column with the player and the first row
-    "standings_rounds_first_row": 3,
-    "standings_highlight": 5,  # colour the top 5 gold, the next 5 silver, the next 5 bronze (0 = off)
+    "standings_view": "plain", # sheet: "plain" = the columns above, or r1 / r2 / r3 / r12 / r123 (rounds)
+    "standings_round_blocks": "auto",   # round views: "auto" finds the tables by their headers, or type the player, uma, points columns of round 1; 2; 3
+    "standings_total_cols": "auto",     # combined views: "auto", or the player, round 1, round 2, round 3 columns (Q,R,S,T)
+    "standings_hide_zero": True,        # sheet: players with 0 points are not shown
+    "standings_border_values": "9,8,7",  # single rounds: this many points = gold, silver, bronze border
+    "standings_top_n": 10,     # combined views and local points: the best N players get a gold border (0 = off)
     "standings_title": "STANDINGS",
     "standings_rows": 8,       # players per page
     "standings_page_seconds": 6.0,   # time per page while it cycles through everybody
@@ -118,11 +118,11 @@ DEFAULT_SETTINGS = {
 
 
 KEEP_ON_RESET = ("source", "saved_races_dir", "watch_subfolders", "start_delay", "auto_hide",
-                 "update_url", "open_menu", "show_overlay", "results_board", "results_seconds", "default_faces",
+                 "update_url", "open_menu", "stop_server", "show_overlay", "results_board", "results_seconds", "default_faces",
                  "scoring", "standings_board", "standings_mode", "standings_sheet", "standings_tab",
                  "standings_name_col", "standings_score_col", "standings_uma_col", "standings_first_row",
-                 "standings_view", "standings_round_cols", "standings_rounds_sheet", "standings_rounds_tab",
-                 "standings_rounds_name_col", "standings_rounds_first_row", "standings_highlight",
+                 "standings_view", "standings_round_blocks", "standings_total_cols", "standings_border_values",
+                 "standings_top_n", "standings_hide_zero",
                  "standings_title", "standings_rows", "standings_page_seconds", "standings_refresh")
 
 

@@ -112,23 +112,33 @@ def to_number(text):
     return int(v) if v == int(v) else v
 
 
-VIEWS = (("plain", "Points column"), ("r1", "Round 1"), ("r2", "Round 2"), ("r3", "Round 3"),
+VIEWS = (("plain", "The columns above (no rounds)"), ("r1", "Round 1"), ("r2", "Round 2"), ("r3", "Round 3"),
          ("r12", "Rounds 1 + 2"), ("r123", "Rounds 1 + 2 + 3"))
 VIEW_PICKS = {"r1": (0,), "r2": (1,), "r3": (2,), "r12": (0, 1), "r123": (0, 1, 2)}
+SINGLE_VIEWS = ("plain", "r1", "r2", "r3")      # one list of points (the others add rounds up)
 
 
 def view_title(view):
     return dict(VIEWS).get(view, "")
 
 
-def read_rounds(rows, name_col, round_cols, view, first_row=3):
-    """One name column and one points column per round (for example the "Final Rankings Calc" tab).
+def parse_letters(text, per_group, groups=None):
+    """'B,C,D; G,H,I' -> [['B','C','D'], ['G','H','I']]. Raises ValueError when it does not fit."""
+    out = [[c.strip().upper() for c in g.split(",") if c.strip()] for g in str(text).split(";") if g.strip()]
+    if not out or any(len(g) != per_group or any(col_index(c) is None for c in g) for g in out) \
+            or (groups and len(out) != groups):
+        raise ValueError("Columns must look like %s." % ("B,C,D; G,H,I; L,M,N" if per_group == 3 else "Q,R,S,T"))
+    return out
+
+
+def read_rounds(rows, name_col, round_cols, view, first_row=4):
+    """One name column and one points column per round (the 'Final Rankings' block).
     `view` picks which rounds are added up: r1, r2, r3, r12 or r123."""
     ni = col_index(name_col)
-    cols = [col_index(c) for c in str(round_cols).replace(";", ",").split(",") if c.strip()]
+    cols = [col_index(c) for c in round_cols]
     picks = VIEW_PICKS.get(view)
     if ni is None or not picks or any(c is None for c in cols) or max(picks) >= len(cols):
-        raise ValueError("Round columns must look like B,C,D (one letter per round).")
+        raise ValueError("Combined columns must look like Q,R,S,T (player, round 1, 2, 3).")
     out, started = [], False
     for r in rows[max(0, int(first_row) - 1):]:
         name = r[ni].strip() if ni < len(r) else ""
@@ -142,6 +152,93 @@ def read_rounds(rows, name_col, round_cols, view, first_row=3):
         started = True
         out.append({"name": name, "uma": "", "score": sum(v for v in vals if v is not None), "races": 0, "last": 0})
     return rank_rows(out)
+
+
+OLD_DEFAULTS = ("B,C,D; G,H,I; L,M,N", "Q,R,S,T")      # earlier versions saved these; they mean "automatic"
+
+
+def is_auto(text):
+    t = str(text or "").strip().lower()
+    return t in ("", "auto", "automatic") or str(text).strip().upper() in OLD_DEFAULTS
+
+
+def _cells(row):
+    return [str(c).strip().lower() for c in row]
+
+
+def detect_layout(rows):
+    """Find the tables by their header names instead of by column letters. Google leaves hidden columns
+    out of its CSV, which moves every letter: the headers stay the same.
+    Returns {"blocks": [(player, uma, points), ...], "final": (player, r1, r2, r3) or None, "first_row": n}."""
+    for ri, row in enumerate(rows[:20]):
+        c = _cells(row)
+        if "trainer" not in c and "member" not in c:
+            continue
+        blocks = []
+        for i, name in enumerate(c):
+            if name != "trainer":
+                continue
+            uma = next((j for j in range(i + 1, min(i + 4, len(c))) if c[j] == "uma"), None)
+            score = next((j for j in range(i + 1, min(i + 5, len(c))) if c[j] in ("score", "points", "pts")), None)
+            if score is not None:
+                blocks.append((i, uma, score))
+        final = None
+        if "member" in c:
+            m = c.index("member")
+            rs = [next((j for j in range(m + 1, len(c)) if c[j] == "round %d" % k), None) for k in (1, 2, 3)]
+            if all(r is not None for r in rs):
+                final = (m,) + tuple(rs)
+        if blocks or final:
+            return {"blocks": blocks, "final": final, "first_row": ri + 2}     # first_row is 1-based
+    return None
+
+
+def _letter(i):
+    s = ""
+    i += 1
+    while i:
+        i, r = divmod(i - 1, 26)
+        s = chr(65 + r) + s
+    return s
+
+
+def drop_zero(rows_out, hide):
+    out = [r for r in rows_out if not (hide and r["score"] <= 0)]
+    return rank_rows(out)
+
+
+def read_view(rows, s):
+    """The list to show for the chosen view. s = the program's settings."""
+    view = s.get("standings_view", "plain")
+    hide = bool(s.get("standings_hide_zero", True))
+    first = s.get("standings_first_row", 4)
+    if view == "plain":
+        return drop_zero(read_standings(rows, s.get("standings_name_col", "B"), s.get("standings_score_col", "D"),
+                                        s.get("standings_uma_col", "C"), first), hide)
+    auto = None
+    if view in ("r1", "r2", "r3"):
+        text = s.get("standings_round_blocks", "auto")
+        if is_auto(text):
+            auto = detect_layout(rows)
+            k = VIEW_PICKS[view][0]
+            if not auto or len(auto["blocks"]) <= k:
+                raise ValueError("Could not find the Round %d table. Look for the headers Trainer / Uma / Score "
+                                 "or type the columns by hand." % (k + 1))
+            name, uma, score = auto["blocks"][k]
+            return drop_zero(read_standings(rows, _letter(name), _letter(score),
+                                            _letter(uma) if uma is not None else "", auto["first_row"]), hide)
+        name, uma, score = parse_letters(text, 3, 3)[VIEW_PICKS[view][0]]
+        return drop_zero(read_standings(rows, name, score, uma, first), hide)
+    text = s.get("standings_total_cols", "auto")
+    if is_auto(text):
+        auto = detect_layout(rows)
+        if not auto or not auto["final"]:
+            raise ValueError("Could not find the Final Rankings table (headers Member / Round 1 / Round 2 / Round 3). "
+                             "Type the columns by hand.")
+        cols = [_letter(i) for i in auto["final"]]
+        return drop_zero(read_rounds(rows, cols[0], cols[1:], view, auto["first_row"]), hide)
+    cols = parse_letters(text, 4, 1)[0]
+    return drop_zero(read_rounds(rows, cols[0], cols[1:], view, first), hide)
 
 
 def read_standings(rows, name_col="B", score_col="D", uma_col="C", first_row=4):

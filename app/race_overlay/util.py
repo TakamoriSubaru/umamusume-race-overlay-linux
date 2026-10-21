@@ -32,6 +32,40 @@ def process_running(needle):
     return False
 
 
+SERVER_MARKER = "/tmp/race-overlay-server.started"
+
+
+def stop_started_server():
+    """Close the Race Overlay server, but only if the start script started it (so a Race Overlay you
+    opened yourself is left alone). Returns how many processes were asked to stop."""
+    import signal
+    if not os.path.exists(SERVER_MARKER):
+        return 0
+    n, me = 0, os.getpid()
+    try:
+        pids = [int(d) for d in os.listdir("/proc") if d.isdigit() and int(d) != me]
+    except OSError:
+        pids = []
+    for pid in pids:
+        try:
+            with open("/proc/%d/cmdline" % pid, "rb") as f:
+                cmd = f.read().lower()
+        except OSError:
+            continue
+        first = cmd.split(b"\0")[0]
+        if first.endswith(b"server.exe") or (b"server.exe" in cmd and b"wine" in first):
+            try:
+                os.kill(pid, signal.SIGTERM)
+                n += 1
+            except OSError:
+                pass
+    try:
+        os.remove(SERVER_MARKER)
+    except OSError:
+        pass
+    return n
+
+
 def _safe_listdir(folder):
     try:
         return [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]

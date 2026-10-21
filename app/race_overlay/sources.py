@@ -260,6 +260,25 @@ class DemoThread(ReplayBase):
             self._sleep(6.0)
 
 
+class TestReplayThread(ReplayBase):
+    """Menu > "Replay a saved race (test)": play one race file once, no game and no server needed."""
+    error = pyqtSignal(str)
+
+    def __init__(self, path, delay=3.0):
+        super().__init__(1.0)
+        self.path = path
+        self.delay = delay
+        self.counts = False
+
+    def run(self):
+        try:
+            payload, rmap = payload_from_saved_race(self.path)
+        except Exception as e:
+            self.error.emit("Could not read %s: %s" % (os.path.basename(self.path), e))
+            return
+        self.play(payload, rmap, preroll=0.0, delay=self.delay)
+
+
 class WatchThread(ReplayBase):
     """--watch: watch a folder and play the newest race JSON whenever a new one appears.
     With game_match set, it only works while the game process is running."""

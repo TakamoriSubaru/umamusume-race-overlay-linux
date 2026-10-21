@@ -49,6 +49,7 @@ server_up() { (exec 3<>/dev/tcp/127.0.0.1/$PORT) 2>/dev/null; }
 
 if [ "$START" = "server" ] || [ "$START" = "both" ]; then
   if ! server_up; then
+    touch /tmp/race-overlay-server.started      # "this script started the server": the overlay closes it on quit
     ( cd "$FOUND/resources" && WINEPREFIX="$WINEPREFIX_DIR" WINEFSYNC=1 "$WINE_BIN" server.exe \
         > /tmp/race-overlay-server.log 2>&1 & )
     for _ in $(seq 1 "${RACE_OVERLAY_SERVER_WAIT:-25}"); do server_up && break; sleep 1; done

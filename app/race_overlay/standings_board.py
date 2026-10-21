@@ -5,21 +5,19 @@ stays while the next race is being set up, flipping through all the players. In 
 import math
 import time
 from PyQt6.QtCore import QRectF, QTimer, Qt
-from PyQt6.QtGui import QColor, QFontMetrics, QPainterPath
+from PyQt6.QtGui import QColor, QFontMetrics, QPainterPath, QPen
 from PyQt6.QtWidgets import QMenu
 
 from .constants import PODIUM, STANDINGS_NAME
 from .frameless import fit_window
 from .results_board import FOOT_H, PAD, SUB_H, TOP_H, ResultsBoard
 from .scoring import rank_rows
-from .sheets import load_rows, read_rounds, read_standings, view_title
+from .sheets import SINGLE_VIEWS, load_rows, read_view, view_title
 from .updater import Job
 
 ROW_H = 38
 COL_W = 330
-TIERS = ("#f2c200", "#c9c9cf", "#e6b88a")       # top block, second block, third block
-TIER_TEXT = "#1d1d26"
-TIER_SUB = "#4a4a58"
+TIERS = ("#f2c200", "#c9c9cf", "#e08a3c")       # gold, silver, bronze border
 FADE = 0.3       # seconds a new page takes to fade in
 
 
@@ -95,14 +93,9 @@ class StandingsBoard(ResultsBoard):
         self.job.start()
 
     def view_source(self):
-        """(link or file, tab) to read for the chosen view."""
+        """(link or file, tab) to read: always the one sheet; the views pick their columns from it."""
         s = self.ov.s
-        if s.get("standings_view", "plain") == "plain":
-            return s.get("standings_sheet", ""), s.get("standings_tab", "")
-        own = (s.get("standings_rounds_sheet") or "").strip()
-        if own:
-            return own, s.get("standings_rounds_tab", "")
-        return s.get("standings_sheet", ""), s.get("standings_rounds_tab", "")
+        return s.get("standings_sheet", ""), s.get("standings_tab", "")
 
     def _sheet_ok(self, table, key):
         self.raw = table
@@ -120,15 +113,8 @@ class StandingsBoard(ResultsBoard):
         if self.raw is None or self.raw_src != self.view_source():
             return                        # the table on hand is not the one this view needs
         s = self.ov.s
-        view = s.get("standings_view", "plain")
         try:
-            if view == "plain":
-                rows = read_standings(self.raw, s.get("standings_name_col", "B"), s.get("standings_score_col", "D"),
-                                      s.get("standings_uma_col", "C"), s.get("standings_first_row", 4))
-            else:
-                rows = read_rounds(self.raw, s.get("standings_rounds_name_col", "A"),
-                                   s.get("standings_round_cols", "B,C,D"), view,
-                                   s.get("standings_rounds_first_row", 3))
+            rows = read_view(self.raw, s)
         except ValueError as e:
             self.status = str(e)
             return
@@ -203,17 +189,18 @@ class StandingsBoard(ResultsBoard):
         ov = self.ov
         rank = row["rank"]
         rh = ROW_H - 4
-        block = int(ov.s.get("standings_highlight", 5) or 0)
-        tier = (rank - 1) // block if block > 0 else 9
         path = QPainterPath()
         path.addRoundedRect(QRectF(x, y, COL_W, rh), 6, 6)
-        if tier < 3:                      # gold / silver / bronze rows, like the sheet
-            p.fillPath(path, QColor(TIERS[tier]))
-            tc, sc, ac = QColor(TIER_TEXT), QColor(TIER_SUB), QColor(TIER_TEXT)
-        else:
-            bg = QColor(tc)
-            bg.setAlpha(20)
-            p.fillPath(path, bg)
+        bg = QColor(tc)
+        bg.setAlpha(20)
+        p.fillPath(path, bg)
+        tier = self.border_tier(row)
+        if tier is not None:             # gold / silver / bronze border
+            pen = QPen(QColor(TIERS[tier]))
+            pen.setWidthF(2.6)
+            p.setPen(pen)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRoundedRect(QRectF(x + 1.3, y + 1.3, COL_W - 2.6, rh - 2.6), 5, 5)
         p.setFont(ov.fnt(16, True))
         p.setPen(tc)
         p.drawText(QRectF(x + 8, y, 34, rh), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, "%d." % rank)
@@ -244,6 +231,26 @@ class StandingsBoard(ResultsBoard):
             p.setPen(ac)
             p.drawText(QRectF(x + COL_W - score_w - 8, y + 21, score_w, 13),
                        Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, "+%d" % row["last"])
+
+    def border_values(self):
+        out = []
+        for part in str(self.ov.s.get("standings_border_values", "9,8,7")).replace(";", ",").split(","):
+            try:
+                out.append(float(part.strip().replace(",", ".")))
+            except ValueError:
+                pass
+        return out[:3]
+
+    def border_tier(self, row):
+        """0 = gold, 1 = silver, 2 = bronze, None = no border.
+        One round (or the plain columns): by points, 9 = gold, 8 = silver, 7 = bronze (editable).
+        Rounds added up, or points counted by this program: the best N players get a gold border."""
+        s = self.ov.s
+        if self.use_sheet() and s.get("standings_view", "plain") in SINGLE_VIEWS:
+            vals = self.border_values()
+            return vals.index(float(row["score"])) if float(row["score"]) in vals else None
+        n = int(s.get("standings_top_n", 10) or 0)
+        return 0 if n > 0 and row["rank"] <= n else None
 
     def contextMenuEvent(self, ev):
         m = QMenu(self)

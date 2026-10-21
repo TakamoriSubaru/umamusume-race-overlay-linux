@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.7.3
+
+- **Fix:** Round 2, Round 3 and the added-up views were wrong with a Google Sheet, because Google leaves hidden columns out of the download and every column letter moves. The tables are now found by their headers (*Trainer / Uma / Score*, *Member / Round 1 / 2 / 3*), so it works either way. Columns typed by hand still work.
+- **New:** players with 0 points are not shown in the standings (option in the Standings tab).
+
+## 1.7.2
+
+- **Fix:** the round views now read the right columns. Everything comes from the one sheet tab: Round 1, 2 and 3 from their own tables, and *Rounds 1 + 2* / *Rounds 1 + 2 + 3* from the *Final Rankings* table. The columns can be changed in the Standings tab (Rounds section).
+- **Changed:** the gold / silver / bronze rows are now **borders**. One round: 9 points = gold, 8 = silver, 7 = bronze (editable). Rounds added up and points counted by the program: the best N players (default 10, editable) get a gold border.
+
+## 1.7.1
+
+- **New:** quitting the overlay now also closes the Race Overlay server that the start script started (Menu tab, can be turned off). A Race Overlay you opened yourself is never closed.
+- **New:** **Replay a saved race (test)** in the Menu tab and the tray menu: choose a race file and the tower, results board and standings board play it, with no game and no server. It never gives points.
+
 ## 1.7.0
 
 - **New:** **round views** for the standings board: *Round 1*, *Round 2*, *Round 3*, *Rounds 1 + 2* and *Rounds 1 + 2 + 3*. Set them up in the Standings tab (Rounds section) and switch while streaming: right click the standings board or use the tray menu, *Standings view*.

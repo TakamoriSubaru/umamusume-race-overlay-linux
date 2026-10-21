@@ -37,11 +37,11 @@ from .results_board import ResultsBoard
 from .scoring import ScoreBook, points_for
 from .settings_dialog import SettingsDialog
 from .simdata import parse_sim
-from .sources import WatchThread, choose_source
+from .sources import TestReplayThread, WatchThread, choose_source
 from .standings_board import StandingsBoard
 from .tray import make_tray_icon
 from .updater import restart_program
-from .util import fmt_time, open_folder
+from .util import fmt_time, open_folder, stop_started_server
 
 
 class Horse:
@@ -157,6 +157,7 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.resize(BASE_W, 420)
 
         self.board = ResultsBoard(self)
+        self.test_thread = None                 # "Replay a saved race (test)"
         self.book = ScoreBook()                 # points of every race (scores.json)
         self.standings = StandingsBoard(self)
 
@@ -769,6 +770,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.act_board = m.addAction("Show results board (to place it)", lambda: self.set_board_pinned(not self.board.pinned))
         self.act_stand = m.addAction("Show standings board (to place it)",
                                      lambda: self.set_standings_pinned(not self.standings.pinned))
+        m.addAction("Replay a saved race (test)...", self.test_replay)
         self.act_prev = m.addAction("Show preview race")
         self.act_prev.setCheckable(True)
         self.act_prev.triggered.connect(lambda on: self.set_preview(on))
@@ -860,12 +862,16 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.source.stop()
         except Exception:
             pass
+        if self.test_thread is not None:
+            self.test_thread.stop()
         if self.dialog is not None:
             self.dialog.close()
         if self.tray is not None:
             self.tray.hide()
         self.board.close()
         self.standings.close()
+        if self.s.get("stop_server", True):
+            stop_started_server()
         self.close()
         QApplication.instance().quit()
 
@@ -1123,7 +1129,8 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.board_done = True
         entries = self.results_entries()
         line1, _line2 = self.course_lines(self.course_info)
-        counts = (not self.preview) and bool(getattr(self.source, "counts", True))
+        testing = self.test_thread is not None and self.test_thread.isRunning()
+        counts = (not self.preview) and (not testing) and bool(getattr(self.source, "counts", True))
         scoring = bool(self.s.get("scoring", True)) and counts
         if scoring:
             named = [e for e in entries if e["h"].trainer.strip()]
@@ -1174,6 +1181,30 @@ class OverlayWidget(FramelessMixin, QWidget):
             out.append({"h": horses[i], "place": place, "time": fmt_time(fins[i]),
                         "gap": "Winner" if place == 1 else "+%.3f" % (fins[i] - fins[order[0]])})
         return out, self.course_lines(payload["courseInfo"])[0]
+
+    def test_replay(self, path=None):
+        """Play one saved race file (no game, no server) to see the tower, results and standings."""
+        from PyQt6.QtWidgets import QFileDialog
+        if self.clock_active or (self.racing and not self.preview):
+            return                                    # a real race is running - do not disturb it
+        if not path:
+            start = self.s.get("saved_races_dir") or self.cfg.get("watch_dir") or os.path.expanduser("~")
+            path, _ = QFileDialog.getOpenFileName(None, "Choose a saved race file", start,
+                                                  "Race files (*.json);;All files (*)")
+        if not path:
+            return
+        if self.preview:
+            self.set_preview(False)
+        if self.test_thread is not None and self.test_thread.isRunning():
+            self.test_thread.stop()
+            self.test_thread.wait(2000)
+        t = TestReplayThread(path)
+        t.race.connect(self.on_race)
+        t.clock.connect(self.on_clock)
+        t.error.connect(lambda msg: logbuf.add(msg))
+        self.test_thread = t
+        t.start()
+        logbuf.add("test replay: " + os.path.basename(path))
 
     def sample_standings(self):
         """Made-up scores, to place and style the standings board before any race has been run."""
