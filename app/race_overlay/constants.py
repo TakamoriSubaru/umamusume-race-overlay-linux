@@ -11,7 +11,7 @@ STANDINGS_NAME = "Umamusume Standings (Linux)"     # window name of the standing
 RESULTS_NAME = "Umamusume Race Results (Linux)"   # window name of the results board (pick it in OBS)
 
 
-APP_VERSION = "1.7.0"
+APP_VERSION = "1.7.3"
 
 
 SLIDE_SECONDS = 0.45       # how long the tower takes to slide in / out
