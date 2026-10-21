@@ -43,18 +43,38 @@ sleep "$RACE_OVERLAY_DELAY"
 #   app    = the whole Race Overlay program (it starts its own server)
 #   both   = first the server, then the program
 START="${RACE_OVERLAY_START:-server}"
-PORT=5315
+PORT="${RACE_OVERLAY_PORT:-5315}"
+SERVER_LOG=/tmp/race-overlay-server.log
 
 server_up() { (exec 3<>/dev/tcp/127.0.0.1/$PORT) 2>/dev/null; }
 
+start_server() {
+  touch /tmp/race-overlay-server.started      # "this script started the server": the overlay closes it on quit
+  : > "$SERVER_LOG"
+  ( cd "$FOUND/resources" && WINEPREFIX="$WINEPREFIX_DIR" WINEFSYNC=1 "$WINE_BIN" server.exe \
+      > "$SERVER_LOG" 2>&1 & )
+}
+
 if [ "$START" = "server" ] || [ "$START" = "both" ]; then
-  if ! server_up; then
-    touch /tmp/race-overlay-server.started      # "this script started the server": the overlay closes it on quit
-    ( cd "$FOUND/resources" && WINEPREFIX="$WINEPREFIX_DIR" WINEFSYNC=1 "$WINE_BIN" server.exe \
-        > /tmp/race-overlay-server.log 2>&1 & )
-    for _ in $(seq 1 "${RACE_OVERLAY_SERVER_WAIT:-25}"); do server_up && break; sleep 1; done
-    server_up || say "Race Overlay server" "The Race Overlay server did not start.\n\nLog: /tmp/race-overlay-server.log"
-  fi
+  # The server only answers once it has found the running game, and a game that is still loading
+  # is not found yet (the log then says "is not running"). So we do not wait a long fixed time:
+  # we start the server, and when it did not find the game we stop it and try again a moment
+  # later. The server is up a few seconds after the game is ready.
+  tries=0
+  while ! server_up; do
+    tries=$((tries + 1))
+    [ "$tries" -gt "${RACE_OVERLAY_TRIES:-40}" ] && break
+    pkill -f "server.exe" 2>/dev/null && sleep 1
+    start_server
+    for _ in $(seq 1 "${RACE_OVERLAY_ATTEMPT_WAIT:-40}"); do
+      server_up && break
+      grep -q "is not running" "$SERVER_LOG" 2>/dev/null && break     # did not find the game: try again
+      sleep 1
+    done
+    server_up && break
+    sleep "${RACE_OVERLAY_RETRY_PAUSE:-3}"
+  done
+  server_up || say "Race Overlay server" "The Race Overlay server did not start.\n\nIs Uma Musume running? Log: $SERVER_LOG"
 fi
 
 if [ "$START" = "app" ] || [ "$START" = "both" ]; then

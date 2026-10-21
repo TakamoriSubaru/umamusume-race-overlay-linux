@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.1
+
+- **Faster:** the Race Overlay server now starts as soon as it can. Before, the start script waited a fixed time (15 s, or 60 s on a slow game) and the server did not find the game when that was too short. Now it tries right away and tries again every few seconds until the server has found the game, so it is up a few seconds after the game is ready. `RACE_OVERLAY_DELAY` in `settings.sh` is now 5 seconds.
+
 ## 1.8.0
 
 - **New:** **avatars** in the standings: every player gets the picture you chose in the Players tab (the first letter when there is none). Can be turned off.

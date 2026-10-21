@@ -23,7 +23,8 @@ if [ -z "${WINE_BIN:-}" ]; then
   WINE_BIN="$(ls -d "$STEAM_DIR"/compatibilitytools.d/GE-Proton*/files/bin/wine64 2>/dev/null | sort -V | tail -n 1)"
   [ -n "$WINE_BIN" ] || WINE_BIN="$(command -v wine64 || command -v wine || echo wine64)"
 fi
-RACE_OVERLAY_DELAY=15      # seconds to wait after the game starts before starting Race Overlay
+RACE_OVERLAY_DELAY=5       # seconds to wait after the game starts before the first try. The server is
+                           # tried again every few seconds until it has found the game (no long wait needed)
 
 # Text found in the game's process name
 GAME_MATCH="umamusume"
