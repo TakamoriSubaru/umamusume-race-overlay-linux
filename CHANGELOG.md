@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.8.0
+
+- **New:** **avatars** in the standings: every player gets the picture you chose in the Players tab (the first letter when there is none). Can be turned off.
+- **New:** **portrait or landscape**: one column, or two columns side by side (Standings tab, Look section).
+- **New:** **show the standings only when you want**: after every N races (for example 5), or never automatically. The new *Show / hide the standings now* button (Standings tab and tray menu) shows them by hand.
+- **Changed:** thinner border. The added-up views are now called **After Round 2** and **Overall Total**.
+
 ## 1.7.3
 
 - **Fix:** Round 2, Round 3 and the added-up views were wrong with a Google Sheet, because Google leaves hidden columns out of the download and every column letter moves. The tables are now found by their headers (*Trainer / Uma / Score*, *Member / Round 1 / 2 / 3*), so it works either way. Columns typed by hand still work.

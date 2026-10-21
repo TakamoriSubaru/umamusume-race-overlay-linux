@@ -113,7 +113,7 @@ def to_number(text):
 
 
 VIEWS = (("plain", "The columns above (no rounds)"), ("r1", "Round 1"), ("r2", "Round 2"), ("r3", "Round 3"),
-         ("r12", "Rounds 1 + 2"), ("r123", "Rounds 1 + 2 + 3"))
+         ("r12", "After Round 2"), ("r123", "Overall Total"))
 VIEW_PICKS = {"r1": (0,), "r2": (1,), "r3": (2,), "r12": (0, 1), "r123": (0, 1, 2)}
 SINGLE_VIEWS = ("plain", "r1", "r2", "r3")      # one list of points (the others add rounds up)
 

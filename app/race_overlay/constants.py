@@ -107,6 +107,9 @@ DEFAULT_SETTINGS = {
     "standings_view": "plain", # sheet: "plain" = the columns above, or r1 / r2 / r3 / r12 / r123 (rounds)
     "standings_round_blocks": "auto",   # round views: "auto" finds the tables by their headers, or type the player, uma, points columns of round 1; 2; 3
     "standings_total_cols": "auto",     # combined views: "auto", or the player, round 1, round 2, round 3 columns (Q,R,S,T)
+    "standings_layout": "portrait",   # "portrait" = one column, "landscape" = two columns side by side
+    "standings_avatars": True,        # a picture for every player (from the Players tab, else a letter)
+    "standings_every": 1,             # show the standings after every N races (0 = only when I show them)
     "standings_hide_zero": True,        # sheet: players with 0 points are not shown
     "standings_border_values": "9,8,7",  # single rounds: this many points = gold, silver, bronze border
     "standings_top_n": 10,     # combined views and local points: the best N players get a gold border (0 = off)
@@ -122,7 +125,7 @@ KEEP_ON_RESET = ("source", "saved_races_dir", "watch_subfolders", "start_delay",
                  "scoring", "standings_board", "standings_mode", "standings_sheet", "standings_tab",
                  "standings_name_col", "standings_score_col", "standings_uma_col", "standings_first_row",
                  "standings_view", "standings_round_blocks", "standings_total_cols", "standings_border_values",
-                 "standings_top_n", "standings_hide_zero",
+                 "standings_top_n", "standings_hide_zero", "standings_layout", "standings_avatars", "standings_every",
                  "standings_title", "standings_rows", "standings_page_seconds", "standings_refresh")
 
 

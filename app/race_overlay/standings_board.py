@@ -10,13 +10,13 @@ from PyQt6.QtWidgets import QMenu
 
 from .constants import PODIUM, STANDINGS_NAME
 from .frameless import fit_window
-from .results_board import FOOT_H, PAD, SUB_H, TOP_H, ResultsBoard
+from .results_board import FOOT_H, GUTTER, PAD, SUB_H, TOP_H, ResultsBoard
 from .scoring import rank_rows
 from .sheets import SINGLE_VIEWS, load_rows, read_view, view_title
 from .updater import Job
 
 ROW_H = 38
-COL_W = 330
+COL_W = 350
 TIERS = ("#f2c200", "#c9c9cf", "#e08a3c")       # gold, silver, bronze border
 FADE = 0.3       # seconds a new page takes to fade in
 
@@ -44,6 +44,13 @@ class StandingsBoard(ResultsBoard):
     def per_page(self):
         return max(3, min(20, int(self.ov.s.get("standings_rows", 8) or 8)))
 
+    def layout_cols(self):
+        return 2 if self.ov.s.get("standings_layout") == "landscape" else 1
+
+    def rows_per_col(self, n=None):
+        n = self.per_page() if n is None else n
+        return max(1, int(math.ceil(n / float(self.layout_cols()))))
+
     def pages(self):
         return max(1, int(math.ceil(len(self.rows) / float(self.per_page()))))
 
@@ -51,8 +58,10 @@ class StandingsBoard(ResultsBoard):
         self.rows = rank_rows([dict(r) for r in rows]) if rows else []
         self.entries = self.rows          # the base class draws when entries exist
         n = min(len(self.rows), self.per_page())
-        self.lw = 2 * PAD + COL_W
-        self.lh = TOP_H + SUB_H + max(1, n) * ROW_H + FOOT_H + PAD
+        self.cols = self.layout_cols()
+        self.col_w = COL_W
+        self.lw = 2 * PAD + self.cols * COL_W + (self.cols - 1) * GUTTER
+        self.lh = TOP_H + SUB_H + self.rows_per_col(max(1, n)) * ROW_H + FOOT_H + PAD
         self.page = min(self.page, self.pages() - 1)
         if self.rows:
             fit_window(self, self.lw, self.lh, self.pref_scale)
@@ -62,6 +71,11 @@ class StandingsBoard(ResultsBoard):
                     av = scr.availableGeometry()
                     self.move(av.center().x() - self.width() // 2, av.center().y() - self.height() // 2)
                 self._placed = True
+
+    def relayout(self):
+        """Layout / page size / avatars changed in Settings: size the window again."""
+        self.set_rows(self.rows)
+        self.update()
 
     def set_data(self, entries, footer):
         self.set_rows(entries)
@@ -144,6 +158,12 @@ class StandingsBoard(ResultsBoard):
         self.pending_at = time.monotonic() + max(0.0, delay)
         self.deadline = None
 
+    def show_now(self):
+        """'Show standings now': in right away, stays until the next race starts."""
+        self.refresh(force=True)
+        self.pending_at = time.monotonic()
+        self.deadline = None
+
     def set_pinned(self, on, sample=None):
         if on:
             self.refresh(force=True)
@@ -171,18 +191,22 @@ class StandingsBoard(ResultsBoard):
 
     # ----- drawing ----------------------------------------------------------------------
     def draw_columns(self, p, tc, sc, ac):
-        pp = self.per_page()
+        pp, pc = self.per_page(), self.rows_per_col()
         fade = min(1.0, (time.monotonic() - self.page_at) / FADE)
         p.setFont(self.spaced(10, True, 1.5))
         p.setPen(sc)
-        p.drawText(QRectF(PAD, TOP_H, COL_W - 10, SUB_H), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, "PTS")
+        for c in range(self.cols):
+            x = PAD + c * (COL_W + GUTTER)
+            p.drawText(QRectF(x, TOP_H, COL_W - 10, SUB_H), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                       "PTS")
         if self.pages() > 1:
             p.drawText(QRectF(PAD + 8, TOP_H, 120, SUB_H), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                        "PAGE %d / %d" % (self.page + 1, self.pages()))
         old = p.opacity()
         p.setOpacity(old * fade)
         for i, row in enumerate(self.rows[self.page * pp:(self.page + 1) * pp]):
-            self.draw_row(p, row, PAD, TOP_H + SUB_H + i * ROW_H, tc, sc, ac)
+            c, r = divmod(i, pc)                          # fills the left column first, then the right one
+            self.draw_row(p, row, PAD + c * (COL_W + GUTTER), TOP_H + SUB_H + r * ROW_H, tc, sc, ac)
         p.setOpacity(old)
 
     def draw_row(self, p, row, x, y, tc, sc, ac):
@@ -197,27 +221,35 @@ class StandingsBoard(ResultsBoard):
         tier = self.border_tier(row)
         if tier is not None:             # gold / silver / bronze border
             pen = QPen(QColor(TIERS[tier]))
-            pen.setWidthF(2.6)
+            pen.setWidthF(1.3)
             p.setPen(pen)
             p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawRoundedRect(QRectF(x + 1.3, y + 1.3, COL_W - 2.6, rh - 2.6), 5, 5)
+            p.drawRoundedRect(QRectF(x + 0.65, y + 0.65, COL_W - 1.3, rh - 1.3), 5.5, 5.5)
         p.setFont(ov.fnt(16, True))
         p.setPen(tc)
         p.drawText(QRectF(x + 8, y, 34, rh), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, "%d." % rank)
         score_w = 84
-        name_w = COL_W - 46 - score_w - 6
+        tx = x + 46                       # where the name starts
+        if ov.s.get("standings_avatars", True):
+            key = "p:" + row["name"].strip().lower()           # the same picture as in the tower
+            ov.want_img(key, {"kind": "player", "trainer": row["name"]})
+            asz = 28
+            ov.draw_circle_picture(p, QRectF(x + 40, y + (rh - asz) / 2.0, asz, asz), ov.pix.get(key),
+                                   (row["name"].strip()[:1] or "?").upper(), QColor("#ffffff"))
+            tx = x + 76
+        name_w = COL_W - (tx - x) - score_w - 6
         tf = ov.fnt(13, True)
         p.setFont(tf)
         p.setPen(tc)
         uma = row.get("uma", "")
-        top = QRectF(x + 46, y + (4 if uma else 0), name_w, 18 if uma else rh)
+        top = QRectF(tx, y + (4 if uma else 0), name_w, 18 if uma else rh)
         p.drawText(top, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                    QFontMetrics(tf).elidedText(row["name"], Qt.TextElideMode.ElideRight, int(name_w)))
         if uma:
             nf = ov.fnt(9.5)
             p.setFont(nf)
             p.setPen(sc)
-            p.drawText(QRectF(x + 46, y + 21, name_w, 13), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            p.drawText(QRectF(tx, y + 21, name_w, 13), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                        QFontMetrics(nf).elidedText(uma, Qt.TextElideMode.ElideRight, int(name_w)))
         p.setFont(ov.fnt(18, True, mono=True))
         p.setPen(tc)

@@ -770,6 +770,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.act_board = m.addAction("Show results board (to place it)", lambda: self.set_board_pinned(not self.board.pinned))
         self.act_stand = m.addAction("Show standings board (to place it)",
                                      lambda: self.set_standings_pinned(not self.standings.pinned))
+        m.addAction("Show / hide the standings now", self.show_standings_now)
         m.addAction("Replay a saved race (test)...", self.test_replay)
         self.act_prev = m.addAction("Show preview race")
         self.act_prev.setCheckable(True)
@@ -934,6 +935,8 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.apply_flags()
             self.board.apply_flags()
             self.standings.apply_flags()
+        if key in ("standings_layout", "standings_rows", "standings_avatars"):
+            self.standings.relayout()
         if key == "max_rows":
             self.fit_to_rows()
         if key == "start_delay" and getattr(self, "source", None) is not None:
@@ -1145,10 +1148,15 @@ class OverlayWidget(FramelessMixin, QWidget):
         if shown:
             self.board.present(entries, line1, delay)
         if self.s.get("standings_board", True) and counts and not self.args.hold:
+            every = int(self.s.get("standings_every", 1) or 0)        # 0 = only when you show it yourself
+            done = int(self.cfg.get("races_since_standings", 0)) + 1
+            due = every > 0 and done >= every
+            self.cfg["races_since_standings"] = 0 if due else done
+            save_config(self.cfg)
             stay = float(self.s.get("results_seconds", 10.0))
             if not shown:
                 stay = 0.0
-            if stay > 0 or not shown:
+            if due and (stay > 0 or not shown):
                 self.standings.present(delay=delay + stay + SLIDE_SECONDS + 0.2)
 
     def results_entries(self):
@@ -1205,6 +1213,14 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.test_thread = t
         t.start()
         logbuf.add("test replay: " + os.path.basename(path))
+
+    def show_standings_now(self):
+        """Show (or hide) the standings board by hand, whatever the 'every N races' setting says."""
+        if self.standings.isVisible() and self.standings.want > 0 and not self.standings.pinned:
+            self.standings.hide_now()
+        else:
+            self.standings.show_now()
+        self.cfg["races_since_standings"] = 0
 
     def sample_standings(self):
         """Made-up scores, to place and style the standings board before any race has been run."""
