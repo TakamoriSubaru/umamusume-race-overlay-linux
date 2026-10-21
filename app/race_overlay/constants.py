@@ -28,6 +28,11 @@ HEADER_H = 66
 
 FOOT_PAD = 8
 
+# the compact "corner" tower (Look tab: Tower style)
+COMPACT_W = 250
+COMPACT_ROW_H = 34
+COMPACT_HEADER_H = 36
+
 
 STYLE_COLOR = {1: "#5ca1e5", 2: "#a6db24", 3: "#ffdf31", 4: "#ffb538"}
 
@@ -88,6 +93,8 @@ DEFAULT_SETTINGS = {
     "auto_hide": True,         # window is hidden until a race starts, hidden again after it
     "slide": "auto",           # slide in from: "auto" (the side the window is on), "left", "right", "off"
     # --- tower
+    "tower_style": "full",     # "full" = the whole tower, "compact" = a small corner tower with only the top umas
+    "compact_rows": 5,         # compact tower: how many umas are shown
     "rank_arrows": True,       # small up / down arrow when a uma gains or loses a place
     "max_rows": 0,             # show only the top N umas in the tower (0 = all of them)
     "accent": "#f5c518",       # accent colour (results board title line and track name)

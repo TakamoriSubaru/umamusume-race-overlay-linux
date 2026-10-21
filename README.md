@@ -219,6 +219,8 @@ All in the **Look** tab:
 | --- | --- |
 | **Position arrows** | A small green ▲ / red ▼ next to the rank when a uma gains or loses a place. It fades after about 2.5 seconds. Nothing shows in the first 3 seconds of a race, while everybody leaves the gates. |
 | **Rows in the tower** | Show only the top N umas (*All of them* = no limit). The window gets shorter to match, and a uma that drops out of the top N slides out of view. |
+| **Tower style** | *Full tower*, or the **small corner tower**: a compact tower with only the top umas (2 to 10, default 5), each with place, picture, name and gap, and a one-line header with the race clock. When the race ends it slides out and the results board comes in as usual. Also in the tray menu and the right-click menu: *Small corner tower*. |
+| **Move window to** | Puts the overlay window in a corner of the screen (top left, top right, bottom left, bottom right). You can still drag it afterwards. |
 | **Colour set** | One click sets the background, text, small text and accent colours. Every colour can still be changed afterwards. |
 | **Auto size** | Always on (turn it off with `--no-autosize`). The height follows the rows that are shown. If the tower would be taller than your screen (for example 18 umas on a laptop), it is scaled down to fit and goes back to your own size for a smaller field. |
 
@@ -392,7 +394,7 @@ Use *Show standings board (to place it)* in the Menu to put the window where you
 Planned, not released yet:
 
 - [x] ~~**NASCAR style overlay:** full results board when the race finishes~~ (done in 1.4.0: the results board; *Rows in the tower* gives the short top-N tower)
-- [ ] **Corner overlay:** a dedicated small top ~5 view during the race that grows into the results board
+- [x] ~~**Corner overlay:** a small top ~5 tower during the race~~ (done in 1.9.0: *Tower style*, then the results board comes in at the finish)
 
 ---
 

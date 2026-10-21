@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.0
+
+- **New:** **small corner tower**. In the Look tab, *Tower style* can be set to a compact tower that shows only the top umas (2 to 10, default 5) with place, picture, name and gap, and a short header with the race clock. At the finish it slides out and the results board comes in, as before. Also in the tray menu and the right-click menu.
+- **New:** **Move window to** a corner of the screen (top left, top right, bottom left, bottom right).
+- **Fix:** a round picture could be drawn outside the rows that are shown (a sliver of the next uma under the last row).
+- **Note:** nothing changes unless you pick the small tower. Old settings keep working.
+
 ## 1.8.1
 
 - **Faster:** the Race Overlay server now starts as soon as it can. Before, the start script waited a fixed time (15 s, or 60 s on a slow game) and the server did not find the game when that was too short. Now it tries right away and tries again every few seconds until the server has found the game, so it is up a few seconds after the game is ready. `RACE_OVERLAY_DELAY` in `settings.sh` is now 5 seconds.

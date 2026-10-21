@@ -14,6 +14,9 @@ from .constants import (
     ARROW_AFTER,
     ARROW_SECONDS,
     BASE_W,
+    COMPACT_HEADER_H,
+    COMPACT_ROW_H,
+    COMPACT_W,
     DEFAULT_SETTINGS,
     FOOT_PAD,
     HEADER_H,
@@ -165,8 +168,34 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.timer.timeout.connect(self.tick)
         self.timer.start(16)
 
+    # ----- tower style: the full tower or the small corner tower ---------------------------
+    def compact(self):
+        return self.s.get("tower_style") == "compact"
+
+    @property
+    def bw(self):
+        return COMPACT_W if self.compact() else BASE_W
+
+    @property
+    def hh(self):
+        return COMPACT_HEADER_H if self.compact() else HEADER_H
+
+    @property
+    def rh(self):
+        return COMPACT_ROW_H if self.compact() else ROW_H
+
     def logical_w(self):
-        return BASE_W
+        return self.bw
+
+    def snap_to_corner(self, corner):
+        """Move the window to a corner of its screen (top-left, top-right, bottom-left, bottom-right)."""
+        scr = self.screen()
+        if scr is None or corner not in ("top-left", "top-right", "bottom-left", "bottom-right"):
+            return
+        av, m = scr.availableGeometry(), 24
+        x = av.left() + m if corner.endswith("left") else av.right() - self.width() - m + 1
+        y = av.top() + m if corner.startswith("top") else av.bottom() - self.height() - m + 1
+        self.move(x, y)
 
     # ----- source wiring ------------------------------------------------------
     def attach(self, source):
@@ -295,15 +324,24 @@ class OverlayWidget(FramelessMixin, QWidget):
     # ----- auto size: the window follows the number of umas ----------------------------
     def visible_rows(self):
         n = len(self.horses)
+        if self.compact():
+            return min(n, max(2, int(self.s.get("compact_rows", 5) or 5)))
         m = int(self.s.get("max_rows", 0) or 0)
         return min(n, m) if m > 0 else n
+
+    def refit_rows_now(self):
+        """The tower style changed: put every row at its new place at once."""
+        for h in self.horses:
+            h.target = h.rank * self.rh
+            h.y = h.target
+        self.update()
 
     def fit_to_rows(self):
         """Make the window exactly as tall as the umas that are shown. When that is taller than the
         screen, the whole tower is scaled down to fit (and goes back to your size for a smaller field)."""
         if self.args.no_autosize or not self.horses:
             return
-        fit_window(self, BASE_W, HEADER_H + self.visible_rows() * ROW_H + FOOT_PAD, self.pref_scale)
+        fit_window(self, self.bw, self.hh + self.visible_rows() * self.rh + FOOT_PAD, self.pref_scale)
 
     def on_clock(self, p):
         now = time.monotonic()
@@ -426,7 +464,7 @@ class OverlayWidget(FramelessMixin, QWidget):
                 h.move_at = time.monotonic()
             h.prev_rank = rank
             h.rank = rank
-            h.target = rank * ROW_H
+            h.target = rank * self.rh
             if rank == 0:
                 if fin and res:
                     h.gap_kind, h.gap_lines = "done", (fmt_time(res["finishTimeRaw"]), "")
@@ -542,9 +580,9 @@ class OverlayWidget(FramelessMixin, QWidget):
         elif not a.transparent:
             p.fillRect(self.rect(), QColor(s["bg"]))
 
-        scale = self.width() / BASE_W
+        scale = self.width() / self.bw
         p.scale(scale, scale)
-        lw = BASE_W
+        lw = self.bw
         lh = self.height() / scale
 
         if self.panel_alpha <= 0.01 or not self.horses:
@@ -567,7 +605,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         p.setOpacity(self.panel_alpha)
         rows = self.visible_rows()
         if a.chroma or a.transparent:
-            need_h = HEADER_H + rows * ROW_H + FOOT_PAD
+            need_h = self.hh + rows * self.rh + FOOT_PAD
             path = QPainterPath()
             path.addRoundedRect(QRectF(0, 0, lw, min(lh, need_h)), 10, 10)
             p.fillPath(path, panel)
@@ -575,7 +613,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.draw_header(p, lw)
         p.save()
         # only the rows that are shown: a uma that drops out of the top N slides out under the clip edge
-        p.setClipRect(QRectF(0, HEADER_H, lw, max(0.0, min(lh - HEADER_H, rows * ROW_H))))
+        p.setClipRect(QRectF(0, self.hh, lw, max(0.0, min(lh - self.hh, rows * self.rh))))
         for h in self.horses:
             self.draw_row(p, h, lw, rows)
         p.restore()
@@ -590,7 +628,25 @@ class OverlayWidget(FramelessMixin, QWidget):
         line2 = " · ".join([x for x in (info.get("direction"), info.get("ground"), info.get("weather"), info.get("season")) if x])
         return line1, line2
 
+    def draw_header_compact(self, p, lw):
+        """One short header: the place on the left, the race clock on the right."""
+        tc, sc = QColor(self.s["text_color"]), QColor(self.s["sub_color"])
+        line1, _line2 = self.course_lines(self.course_info)
+        cw = int(lw - 76)
+        f1 = self.fnt(11, True)
+        p.setFont(f1); p.setPen(tc)
+        p.drawText(QRectF(8, 3, cw, 16), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                   QFontMetrics(f1).elidedText(line1, Qt.TextElideMode.ElideRight, cw))
+        p.setFont(self.fnt(9, True)); p.setPen(sc)
+        p.drawText(QRectF(8, 19, cw, 14), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, self.terrain_text)
+        p.setFont(self.fnt(15, True, mono=True)); p.setPen(tc)
+        p.drawText(QRectF(lw - 70, 4, 62, 26), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, self.clock_text)
+        p.setPen(QPen(QColor(255, 255, 255, 30), 1))
+        p.drawLine(QPointF(0, self.hh - 1), QPointF(lw, self.hh - 1))
+
     def draw_header(self, p, lw):
+        if self.compact():
+            return self.draw_header_compact(p, lw)
         tc, sc = QColor(self.s["text_color"]), QColor(self.s["sub_color"])
         line1, line2 = self.course_lines(self.course_info)
 
@@ -609,14 +665,14 @@ class OverlayWidget(FramelessMixin, QWidget):
         p.setFont(self.fnt(10, True)); p.setPen(sc)
         p.drawText(QRectF(10, 44, lw - 20, 16), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, self.terrain_text)
         p.setPen(QPen(QColor(255, 255, 255, 30), 1))
-        p.drawLine(QPointF(0, HEADER_H - 1), QPointF(lw, HEADER_H - 1))
+        p.drawLine(QPointF(0, self.hh - 1), QPointF(lw, self.hh - 1))
 
     def draw_circle_picture(self, p, rect, pm, letter, color):
         """A round picture (cropped to a square first). Without a picture: a dark circle with a letter."""
         circ = QPainterPath()
         circ.addEllipse(rect)
         p.save()
-        p.setClipPath(circ)
+        p.setClipPath(circ, Qt.ClipOperation.IntersectClip)    # stay inside the clip of the rows
         p.fillPath(circ, QColor("#383858"))
         if pm:
             side = min(pm.width(), pm.height())
@@ -662,27 +718,69 @@ class OverlayWidget(FramelessMixin, QWidget):
             cy = y + 7
             tri.moveTo(cx, cy - 3.5); tri.lineTo(cx + 4.5, cy + 2.5); tri.lineTo(cx - 4.5, cy + 2.5)
         else:
-            cy = y + ROW_H - 7
+            cy = y + self.rh - 7
             tri.moveTo(cx, cy + 3.5); tri.lineTo(cx + 4.5, cy - 2.5); tri.lineTo(cx - 4.5, cy - 2.5)
         tri.closeSubpath()
         p.fillPath(tri, col)
 
+    def draw_row_compact(self, p, h, lw, y):
+        """A small row: place, picture, trainer (and uma) on the left, the gap or finish time on the right."""
+        tc, sc = QColor(self.s["text_color"]), QColor(self.s["sub_color"])
+        rh = self.rh
+        if h.rank < 3:
+            c = QColor(PODIUM[h.rank]); c.setAlpha(110)
+            p.setPen(QPen(c, 1))
+            p.drawLine(QPointF(0, y + rh - 1), QPointF(lw, y + rh - 1))
+        p.setFont(self.fnt(15, True))
+        p.setPen(QColor(PODIUM[h.rank]) if h.rank < 3 else tc)
+        p.drawText(QRectF(2, y, 24, rh), Qt.AlignmentFlag.AlignCenter, str(h.rank + 1))
+        self.draw_rank_arrow(p, h, y)
+        asz = 24
+        self.draw_pictures(p, h, QRectF(28, y + (rh - asz) / 2.0, asz, asz), tc)
+        gap_w = 62
+        nx = 58
+        name_w = int(lw - nx - gap_w - 6)
+        if h.trainer:
+            tf = self.fnt(11.5, True)
+            p.setFont(tf); p.setPen(tc)
+            p.drawText(QRectF(nx, y + 3, name_w, 15), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                       QFontMetrics(tf).elidedText(h.trainer, Qt.TextElideMode.ElideRight, name_w))
+            nf = self.fnt(8.5)
+            p.setFont(nf); p.setPen(sc)
+            p.drawText(QRectF(nx, y + 18, name_w, 13), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                       QFontMetrics(nf).elidedText(h.label, Qt.TextElideMode.ElideRight, name_w))
+        else:
+            tf = self.fnt(11.5, True)
+            p.setFont(tf); p.setPen(tc)
+            p.drawText(QRectF(nx, y, name_w, rh), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                       QFontMetrics(tf).elidedText(h.label, Qt.TextElideMode.ElideRight, name_w))
+        l1 = h.gap_lines[0]
+        if h.gap_kind == "lead":
+            p.setFont(self.fnt(10.5, True)); p.setPen(QColor("#d4a017"))
+        elif h.gap_kind == "done":
+            p.setFont(self.fnt(11.5, True)); p.setPen(tc)
+        else:
+            p.setFont(self.fnt(10.5, True)); p.setPen(tc)
+        p.drawText(QRectF(lw - gap_w - 4, y, gap_w, rh), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, l1)
+
     def draw_row(self, p, h, lw, rows=None):
         tc, sc = QColor(self.s["text_color"]), QColor(self.s["sub_color"])
-        y = HEADER_H + (h.y if h.y is not None else h.target)
-        limit = HEADER_H + (rows if rows is not None else len(self.horses)) * ROW_H
-        if y >= limit or y > self.height() / (self.width() / BASE_W) + ROW_H:
+        y = self.hh + (h.y if h.y is not None else h.target)
+        limit = self.hh + (rows if rows is not None else len(self.horses)) * self.rh
+        if y >= limit or y > self.height() / (self.width() / self.bw) + self.rh:
             return
+        if self.compact():
+            return self.draw_row_compact(p, h, lw, y)
         # podium underline
         if h.rank < 3:
             c = QColor(PODIUM[h.rank]); c.setAlpha(110)
             p.setPen(QPen(c, 1))
-            p.drawLine(QPointF(0, y + ROW_H - 1), QPointF(lw, y + ROW_H - 1))
+            p.drawLine(QPointF(0, y + self.rh - 1), QPointF(lw, y + self.rh - 1))
 
         # rank
         p.setFont(self.fnt(17, True))
         p.setPen(QColor(PODIUM[h.rank]) if h.rank < 3 else tc)
-        p.drawText(QRectF(2, y, 26, ROW_H), Qt.AlignmentFlag.AlignCenter, str(h.rank + 1))
+        p.drawText(QRectF(2, y, 26, self.rh), Qt.AlignmentFlag.AlignCenter, str(h.rank + 1))
         self.draw_rank_arrow(p, h, y)
 
         # pictures: the uma and the player are two separate pictures
@@ -728,10 +826,10 @@ class OverlayWidget(FramelessMixin, QWidget):
         l1, l2 = h.gap_lines
         if h.gap_kind == "lead":
             p.setFont(self.fnt(11, True)); p.setPen(QColor("#d4a017"))
-            p.drawText(QRectF(lw - 92, y, 86, ROW_H), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, l1)
+            p.drawText(QRectF(lw - 92, y, 86, self.rh), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, l1)
         elif h.gap_kind == "done":
             p.setFont(self.fnt(13, True)); p.setPen(tc)
-            p.drawText(QRectF(lw - 92, y, 86, ROW_H), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, l1)
+            p.drawText(QRectF(lw - 92, y, 86, self.rh), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, l1)
         elif h.gap_kind == "box":
             p.setFont(self.fnt(11, True)); p.setPen(tc)
             p.drawText(QRectF(lw - 120, y + 8, 114, 16), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, l1)
@@ -772,6 +870,9 @@ class OverlayWidget(FramelessMixin, QWidget):
                                      lambda: self.set_standings_pinned(not self.standings.pinned))
         m.addAction("Show / hide the standings now", self.show_standings_now)
         m.addAction("Replay a saved race (test)...", self.test_replay)
+        self.act_compact = m.addAction("Small corner tower (top 5 only)")
+        self.act_compact.setCheckable(True)
+        self.act_compact.triggered.connect(lambda on: self.set_setting("tower_style", "compact" if on else "full"))
         self.act_prev = m.addAction("Show preview race")
         self.act_prev.setCheckable(True)
         self.act_prev.triggered.connect(lambda on: self.set_preview(on))
@@ -805,6 +906,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.act_board.setText("Hide results board" if self.board.pinned else "Show results board (to place it)")
         self.act_stand.setText("Hide standings board" if self.standings.pinned else "Show standings board (to place it)")
         self.act_prev.setChecked(self.preview)
+        self.act_compact.setChecked(self.compact())
         for mode, act in self.pic_actions.items():
             act.setChecked(mode == self.picture_mode())
         for key, act in self.view_menu_actions.items():
@@ -937,6 +1039,10 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.standings.apply_flags()
         if key in ("standings_layout", "standings_rows", "standings_avatars"):
             self.standings.relayout()
+        if key in ("tower_style", "compact_rows"):
+            self.fit_to_rows()
+            if key == "tower_style":
+                self.refit_rows_now()
         if key == "max_rows":
             self.fit_to_rows()
         if key == "start_delay" and getattr(self, "source", None) is not None:
@@ -1248,6 +1354,10 @@ class OverlayWidget(FramelessMixin, QWidget):
         a2.setCheckable(True)
         a2.setChecked(bool(self.s.get("on_top", True)))
         a2.toggled.connect(lambda on: self.set_setting("on_top", on))
+        a5 = m.addAction("Small corner tower (top 5 only)")
+        a5.setCheckable(True)
+        a5.setChecked(self.compact())
+        a5.toggled.connect(lambda on: self.set_setting("tower_style", "compact" if on else "full"))
         a3 = m.addAction("Show preview race")
         a3.setCheckable(True)
         a3.setChecked(self.preview)

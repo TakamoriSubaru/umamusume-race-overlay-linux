@@ -369,6 +369,36 @@ class SettingsDialog(QDialog):
         self.sp_rows.setToolTip("Show only the first places in the tower. The window height follows the number of rows.")
         f.addRow("Rows in the tower", self.sp_rows)
 
+        self.cmb_style = QComboBox()
+        self.cmb_style.addItem("Full tower", "full")
+        self.cmb_style.addItem("Small corner tower (top umas only)", "compact")
+        self.cmb_style.setCurrentIndex(1 if s.get("tower_style") == "compact" else 0)
+        self.cmb_style.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.cmb_style.setMinimumContentsLength(10)
+        self.cmb_style.currentIndexChanged.connect(lambda _i: ov.set_setting("tower_style", self.cmb_style.currentData()))
+        self.cmb_style.setToolTip("The small tower shows only the first umas, with name and gap. When the race ends, "
+                                  "the results board comes in as usual.")
+        f.addRow("Tower style", self.cmb_style)
+
+        self.sp_crow = QSpinBox()
+        self.sp_crow.setRange(2, 10)
+        self.sp_crow.setSuffix(" umas")
+        self.sp_crow.setValue(int(s.get("compact_rows", 5) or 5))
+        self.sp_crow.valueChanged.connect(lambda v: ov.set_setting("compact_rows", int(v)))
+        f.addRow("Small tower shows", self.sp_crow)
+
+        self.cmb_corner = QComboBox()
+        self.cmb_corner.addItem("Choose a corner...", "")
+        for key, text in (("top-left", "Top left"), ("top-right", "Top right"),
+                          ("bottom-left", "Bottom left"), ("bottom-right", "Bottom right")):
+            self.cmb_corner.addItem(text, key)
+        self.cmb_corner.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.cmb_corner.setMinimumContentsLength(10)
+        self.cmb_corner.currentIndexChanged.connect(
+            lambda _i: self.cmb_corner.currentData() and ov.snap_to_corner(self.cmb_corner.currentData()))
+        self.cmb_corner.setToolTip("Moves the overlay window to that corner of the screen. You can still drag it.")
+        f.addRow("Move window to", self.cmb_corner)
+
         self.cb_board = QCheckBox("Show the results board after each race")
         self.cb_board.setChecked(bool(s.get("results_board", True)))
         self.cb_board.toggled.connect(lambda on: ov.set_setting("results_board", on))
@@ -1042,6 +1072,8 @@ class SettingsDialog(QDialog):
         self.cb_deffont.setChecked(True)
         self.cb_arrows.setChecked(bool(s["rank_arrows"]))
         self.sp_rows.setValue(int(s["max_rows"]))
+        self.cmb_style.setCurrentIndex(0)
+        self.sp_crow.setValue(int(s["compact_rows"]))
         self.cmb_theme.setCurrentIndex(0)
         self.sync_widgets()
 
