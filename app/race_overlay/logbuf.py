@@ -1,4 +1,4 @@
-"""Keeps the last lines the program printed, so the Status tab can show them (no terminal needed)."""
+"""Keeps the last lines the program printed, so the Help tab can show them (no terminal needed)."""
 
 import sys
 import threading

@@ -66,6 +66,39 @@ SOURCE_CHOICES = (("", "Follow the start script (MODE in settings.sh)"),
                   ("watch", "Saved races: read the race files from a folder"))
 
 
+class Collapsible(QWidget):
+    """A folded section: a title you click to open it. Keeps the less used settings out of the way."""
+
+    def __init__(self, title, open_=False, on_toggle=None):
+        super().__init__()
+        self._title = title
+        self._on_toggle = on_toggle
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(4)
+        self.btn = QPushButton()
+        self.btn.setObjectName("fold")
+        self.btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn.clicked.connect(lambda: self.set_open(not self.body.isVisible(), True))
+        lay.addWidget(self.btn)
+        self.body = QWidget()
+        self.body_l = QVBoxLayout(self.body)
+        self.body_l.setContentsMargins(6, 0, 0, 0)
+        lay.addWidget(self.body)
+        self.set_open(open_)
+
+    def set_open(self, on, user=False):
+        self.body.setVisible(bool(on))
+        self.btn.setText(("\u25be  " if on else "\u25b8  ") + self._title)
+        if user and self._on_toggle:
+            self._on_toggle(bool(on))
+
+    def form(self):
+        f = QFormLayout()
+        self.body_l.addLayout(f)
+        return f
+
+
 class SettingsDialog(QDialog):
     def __init__(self, ov):
         super().__init__(None)
@@ -86,13 +119,26 @@ class SettingsDialog(QDialog):
         self.count_job = None
         self._count_again = False
 
-        # ---- Menu tab
+        # ---- Home tab (what most people need: status, show / preview, place the boards)
         mt = QWidget()
         mv = QVBoxLayout(mt)
         self.lbl_state = QLabel()
         self.lbl_state.setWordWrap(True)
         self.lbl_state.setStyleSheet("font-size:15px;")
         mv.addWidget(self.lbl_state)
+
+        qs = Collapsible("Quick start (3 steps)", open_=bool(ov.s.get("quick_start_open", True)),
+                         on_toggle=lambda on: ov.set_setting("quick_start_open", on))
+        qtext = QLabel("<b>1.</b> Start Uma Musume. The overlay waits for it and shows a green dot when it is ready.<br>"
+                       "<b>2.</b> Press <i>Show preview race</i> below to see the tower, and <i>Show overlay window</i> "
+                       "so OBS can see it.<br>"
+                       "<b>3.</b> In OBS add a <i>Window Capture (Xcomposite)</i> source and pick "
+                       "<i>Umamusume Race Overlay (Linux)</i>.<br>"
+                       "<i>The results and standings boards are separate windows. Add them the same way.</i>")
+        qtext.setWordWrap(True)
+        qs.body_l.addWidget(qtext)
+        mv.addWidget(qs)
+
         row_b = QHBoxLayout()
         self.btn_show = QPushButton("Show overlay window")
         self.btn_show.setObjectName("primary")
@@ -102,36 +148,48 @@ class SettingsDialog(QDialog):
         row_b.addWidget(self.btn_show)
         row_b.addWidget(self.btn_prev2)
         mv.addLayout(row_b)
-        self.btn_board = QPushButton("Show results board (to place it)")
-        self.btn_board.clicked.connect(lambda: ov.set_board_pinned(not ov.board.pinned))
-        mv.addWidget(self.btn_board)
-        self.btn_test = QPushButton("Replay a saved race (test, no game needed)...")
-        self.btn_test.clicked.connect(lambda: ov.test_replay())
-        mv.addWidget(self.btn_test)
-        self.btn_stand = QPushButton("Show standings board (to place it)")
-        self.btn_stand.clicked.connect(lambda: ov.set_standings_pinned(not ov.standings.pinned))
-        mv.addWidget(self.btn_stand)
         self.note_show = QLabel()
         self.note_show.setWordWrap(True)
         mv.addWidget(self.note_show)
+
+        bx = QGroupBox("Boards")
+        bxl = QVBoxLayout(bx)
+        bxt = QLabel("Put each board where you want it on the stream, then press the button again to hide it.")
+        bxt.setWordWrap(True)
+        bxl.addWidget(bxt)
+        row_c = QHBoxLayout()
+        self.btn_board = QPushButton("Show results board (to place it)")
+        self.btn_board.clicked.connect(lambda: ov.set_board_pinned(not ov.board.pinned))
+        self.btn_stand = QPushButton("Show standings board (to place it)")
+        self.btn_stand.clicked.connect(lambda: ov.set_standings_pinned(not ov.standings.pinned))
+        row_c.addWidget(self.btn_board)
+        row_c.addWidget(self.btn_stand)
+        bxl.addLayout(row_c)
+        self.btn_test = QPushButton("Replay a saved race (test, no game needed)...")
+        self.btn_test.clicked.connect(lambda: ov.test_replay())
+        bxl.addWidget(self.btn_test)
+        mv.addWidget(bx)
+
+        more = Collapsible("More: start-up, picture folders, updates")
+        mm = more.body_l
         self.cb_menu = QCheckBox("Open this menu when the program starts")
         self.cb_menu.setChecked(bool(ov.s.get("open_menu", True)))
         self.cb_menu.toggled.connect(lambda on: ov.set_setting("open_menu", on))
-        mv.addWidget(self.cb_menu)
+        mm.addWidget(self.cb_menu)
         self.cb_server = QCheckBox("Quitting the overlay also closes the Race Overlay server")
         self.cb_server.setChecked(bool(ov.s.get("stop_server", True)))
         self.cb_server.toggled.connect(lambda on: ov.set_setting("stop_server", on))
         self.cb_server.setToolTip("Only the server that the start script started is closed.")
-        mv.addWidget(self.cb_server)
+        mm.addWidget(self.cb_server)
 
         box = QGroupBox("Where to put the pictures")
         bl = QVBoxLayout(box)
         for title, path, hint in (
                 ("Uma faces", ov.thumbs.uma,
-                 "Easiest: use the Umas tab. Or name the file with the card id, chara id or uma name, "
+                 "Easiest: use the People tab. Or name the file with the card id, chara id or uma name, "
                  "e.g. 100101.png or Special Week.png. Without a picture of yours the face from Race Overlay is used."),
                 ("Player pictures", ov.thumbs.players,
-                 "Easiest: use the Players tab. Or name the file after the trainer, e.g. Takamori.png")):
+                 "Easiest: use the People tab. Or name the file after the trainer, e.g. Takamori.png")):
             lab = QLabel("<b>%s</b><br>%s<br><i>%s</i>" % (title, path, hint))
             lab.setWordWrap(True)
             lab.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -139,7 +197,7 @@ class SettingsDialog(QDialog):
             bo = QPushButton("Open folder")
             bo.clicked.connect(lambda _=False, pth=path: open_folder(pth))
             bl.addWidget(bo)
-        mv.addWidget(box)
+        mm.addWidget(box)
 
         ubox = QGroupBox("Updates  (current version %s)" % APP_VERSION)
         ul = QVBoxLayout(ubox)
@@ -162,18 +220,19 @@ class SettingsDialog(QDialog):
         self.btn_install.setVisible(False)
         self.btn_install.clicked.connect(self.install_online)
         ul.addWidget(self.btn_install)
-        mv.addWidget(ubox)
+        mm.addWidget(ubox)
         self.pending = None
         self.job = None
+        mv.addWidget(more)
 
         mv.addStretch(1)
         bq = QPushButton("Quit the overlay program")
         bq.setObjectName("danger")
         bq.clicked.connect(ov.quit_app)
         mv.addWidget(bq)
-        tabs.addTab(self.scrolled(mt), "Menu")
+        tabs.addTab(self.scrolled(mt), "Home")
 
-        # ---- Races tab (where the races come from + the saved races folder)
+        # ---- Race data tab (where the races come from + the saved races folder)
         rt = QWidget()
         rv = QVBoxLayout(rt)
         sbox = QGroupBox("Where do the races come from?")
@@ -249,7 +308,7 @@ class SettingsDialog(QDialog):
         kbox = QGroupBox("Race Overlay server (live mode)")
         kl = QVBoxLayout(kbox)
         kn = QLabel("The server only works while Uma Musume is running. To test without the game use "
-                    "<i>Show preview race</i> or <i>Replay a saved race (test)</i> in the Menu tab.")
+                    "<i>Show preview race</i> or <i>Replay a saved race (test)</i> in the Home tab.")
         kn.setWordWrap(True)
         kl.addWidget(kn)
         rv.addWidget(kbox)
@@ -261,25 +320,31 @@ class SettingsDialog(QDialog):
         wl.addWidget(know)
         rv.addWidget(wbox)
         rv.addStretch(1)
-        tabs.addTab(self.scrolled(rt), "Races")
+        tabs.addTab(self.scrolled(rt), "Race data")
         self.update_source_label()
         self.refresh_count()
 
         # ---- Look tab
         look = QWidget()
-        f = QFormLayout(look)
+        lv = QVBoxLayout(look)
+        f = QFormLayout()                 # the few settings most people use
+        lv.addLayout(f)
+        adv = Collapsible("More options: colours, window, results board")
+        f2 = adv.form()                   # everything else is folded away
+        lv.addWidget(adv)
+        lv.addStretch(1)
         s = ov.s
 
         self.cb_top = QCheckBox("Keep the overlay above all other windows")
         self.cb_top.setChecked(bool(s.get("on_top", True)))
         self.cb_top.toggled.connect(lambda on: ov.set_setting("on_top", on))
-        f.addRow("Always on top", self.cb_top)
+        f2.addRow("Always on top", self.cb_top)
 
         self.cb_hide = QCheckBox("Hide the window until a race starts")
         self.cb_hide.setChecked(bool(s.get("auto_hide", True)))
         self.cb_hide.toggled.connect(lambda on: ov.set_setting("auto_hide", on))
-        self.cb_hide.setToolTip("The window is hidden when no race runs and shows (without taking focus from the game)\nwhen a race starts. Use 'Show overlay window' in the Menu tab to place it.")
-        f.addRow("Before the race", self.cb_hide)
+        self.cb_hide.setToolTip("The window is hidden when no race runs and shows (without taking focus from the game)\nwhen a race starts. Use 'Show overlay window' in the Home tab to place it.")
+        f2.addRow("Before the race", self.cb_hide)
 
         self.cmb_slide = QComboBox()
         for _v, text in SLIDE_CHOICES:
@@ -287,13 +352,13 @@ class SettingsDialog(QDialog):
         self.cmb_slide.setCurrentIndex(next((i for i, (v, _t) in enumerate(SLIDE_CHOICES)
                                              if v == s.get("slide", "auto")), 0))
         self.cmb_slide.activated.connect(lambda i: ov.set_setting("slide", SLIDE_CHOICES[i][0]))
-        f.addRow("Slides in from", self.cmb_slide)
+        f2.addRow("Slides in from", self.cmb_slide)
 
         self.cb_title = QCheckBox("Show the window title bar")
         self.cb_title.setChecked(bool(s.get("title_bar", False)))
         self.cb_title.toggled.connect(lambda on: ov.set_setting("title_bar", on))
         self.cb_title.setToolTip("Off = clean window: drag to move it, pull the edges to resize it.")
-        f.addRow("Title bar", self.cb_title)
+        f2.addRow("Title bar", self.cb_title)
 
         self.cmb_avatar = QComboBox()
         self._pic_modes = [m for m, _ in ov.PICTURE_CHOICES]
@@ -312,25 +377,25 @@ class SettingsDialog(QDialog):
 
         self.btn_bg = QPushButton()
         self.btn_bg.clicked.connect(lambda: self.pick("bg", self.btn_bg))
-        f.addRow("Background colour", self.btn_bg)
+        f2.addRow("Background colour", self.btn_bg)
 
         self.sl_op = QSlider(Qt.Orientation.Horizontal)
         self.sl_op.setRange(0, 100)
         self.sl_op.setValue(int(float(s.get("bg_opacity", 1.0)) * 100))
         self.sl_op.valueChanged.connect(lambda v: ov.set_setting("bg_opacity", v / 100.0))
-        f.addRow("Background opacity\n(--transparent / --chroma)", self.sl_op)
+        f2.addRow("Background opacity\n(--transparent / --chroma)", self.sl_op)
 
         self.btn_tc = QPushButton()
         self.btn_tc.clicked.connect(lambda: self.pick("text_color", self.btn_tc))
-        f.addRow("Text colour", self.btn_tc)
+        f2.addRow("Text colour", self.btn_tc)
 
         self.btn_sc = QPushButton()
         self.btn_sc.clicked.connect(lambda: self.pick("sub_color", self.btn_sc))
-        f.addRow("Small text colour", self.btn_sc)
+        f2.addRow("Small text colour", self.btn_sc)
 
         self.btn_ac = QPushButton()
         self.btn_ac.clicked.connect(lambda: self.pick("accent", self.btn_ac))
-        f.addRow("Accent colour\n(results board)", self.btn_ac)
+        f2.addRow("Accent colour\n(results board)", self.btn_ac)
 
         row = QHBoxLayout()
         self.sl_size = QSlider(Qt.Orientation.Horizontal)
@@ -353,12 +418,12 @@ class SettingsDialog(QDialog):
         self.font_box.currentFontChanged.connect(self.on_font)
         row2.addWidget(self.cb_deffont)
         row2.addWidget(self.font_box, 1)
-        f.addRow("Font", row2)
+        f2.addRow("Font", row2)
 
         self.cb_arrows = QCheckBox("Show an arrow when a uma gains or loses a place")
         self.cb_arrows.setChecked(bool(s.get("rank_arrows", True)))
         self.cb_arrows.toggled.connect(lambda on: ov.set_setting("rank_arrows", on))
-        f.addRow("Position arrows", self.cb_arrows)
+        f2.addRow("Position arrows", self.cb_arrows)
 
         self.sp_rows = QSpinBox()
         self.sp_rows.setRange(0, 18)
@@ -367,7 +432,7 @@ class SettingsDialog(QDialog):
         self.sp_rows.setValue(int(s.get("max_rows", 0) or 0))
         self.sp_rows.valueChanged.connect(lambda v: ov.set_setting("max_rows", int(v)))
         self.sp_rows.setToolTip("Show only the first places in the tower. The window height follows the number of rows.")
-        f.addRow("Rows in the tower", self.sp_rows)
+        f2.addRow("Rows in the tower", self.sp_rows)
 
         self.cmb_style = QComboBox()
         self.cmb_style.addItem("Full tower", "full")
@@ -375,7 +440,9 @@ class SettingsDialog(QDialog):
         self.cmb_style.setCurrentIndex(1 if s.get("tower_style") == "compact" else 0)
         self.cmb_style.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.cmb_style.setMinimumContentsLength(10)
-        self.cmb_style.currentIndexChanged.connect(lambda _i: ov.set_setting("tower_style", self.cmb_style.currentData()))
+        self.cmb_style.currentIndexChanged.connect(lambda _i: (
+            ov.set_setting("tower_style", self.cmb_style.currentData()),
+            self.sp_crow.setEnabled(self.cmb_style.currentData() == "compact")))
         self.cmb_style.setToolTip("The small tower shows only the first umas, with name and gap. When the race ends, "
                                   "the results board comes in as usual.")
         f.addRow("Tower style", self.cmb_style)
@@ -385,6 +452,7 @@ class SettingsDialog(QDialog):
         self.sp_crow.setSuffix(" umas")
         self.sp_crow.setValue(int(s.get("compact_rows", 5) or 5))
         self.sp_crow.valueChanged.connect(lambda v: ov.set_setting("compact_rows", int(v)))
+        self.sp_crow.setEnabled(s.get("tower_style") == "compact")
         f.addRow("Small tower shows", self.sp_crow)
 
         self.cmb_corner = QComboBox()
@@ -397,14 +465,14 @@ class SettingsDialog(QDialog):
         self.cmb_corner.currentIndexChanged.connect(
             lambda _i: self.cmb_corner.currentData() and ov.snap_to_corner(self.cmb_corner.currentData()))
         self.cmb_corner.setToolTip("Moves the overlay window to that corner of the screen. You can still drag it.")
-        f.addRow("Move window to", self.cmb_corner)
+        f2.addRow("Move window to", self.cmb_corner)
 
         self.cb_board = QCheckBox("Show the results board after each race")
         self.cb_board.setChecked(bool(s.get("results_board", True)))
         self.cb_board.toggled.connect(lambda on: ov.set_setting("results_board", on))
         self.cb_board.setToolTip("A second window ('Umamusume Race Results (Linux)') with the final places.\n"
-                                 "Add it as its own window source in OBS. Use 'Show results board' in the Menu tab to place it.")
-        f.addRow("Results board", self.cb_board)
+                                 "Add it as its own window source in OBS. Use 'Show results board' in the Home tab to place it.")
+        f2.addRow("Results board", self.cb_board)
 
         self.sp_board = QDoubleSpinBox()
         self.sp_board.setRange(0.0, 120.0)
@@ -414,7 +482,7 @@ class SettingsDialog(QDialog):
         self.sp_board.setSuffix(" seconds")
         self.sp_board.setValue(float(s.get("results_seconds", 10.0)))
         self.sp_board.valueChanged.connect(lambda v: ov.set_setting("results_seconds", float(v)))
-        f.addRow("Results board stays", self.sp_board)
+        f2.addRow("Results board stays", self.sp_board)
 
         self.cb_prev = QCheckBox("Show a preview race (to see your changes)")
         self.cb_prev.toggled.connect(ov.set_preview)
@@ -422,10 +490,11 @@ class SettingsDialog(QDialog):
 
         btn_reset = QPushButton("Reset look to defaults")
         btn_reset.clicked.connect(self.reset)
-        f.addRow("", btn_reset)
+        f2.addRow("", btn_reset)
         tabs.addTab(self.scrolled(look), "Look")
 
-        # ---- Players tab
+        # ---- People tab (Players, Umas, Outfits as inner tabs)
+        people = QTabWidget()
         pl = QWidget()
         v = QVBoxLayout(pl)
         info = QLabel("Every trainer that appears in a race is collected here automatically.\n"
@@ -454,7 +523,7 @@ class SettingsDialog(QDialog):
             b.clicked.connect(fn)
             br.addWidget(b)
         v.addLayout(br)
-        tabs.addTab(pl, "Players")
+        people.addTab(pl, "Players")
 
         # ---- Umas tab (the uma pictures)
         ut = QWidget()
@@ -492,7 +561,7 @@ class SettingsDialog(QDialog):
             b.clicked.connect(fn)
             ubr.addWidget(b)
         uv.addLayout(ubr)
-        tabs.addTab(ut, "Umas")
+        people.addTab(ut, "Umas")
         self._uma_pix_count = -1
 
         # ---- Outfits tab (names for alternative outfits)
@@ -518,11 +587,12 @@ class SettingsDialog(QDialog):
         self._outfit_busy = False
         self.otable.itemChanged.connect(self.on_outfit_edited)
         ov_l.addWidget(self.otable, 1)
-        tabs.addTab(ot, "Outfits")
+        people.addTab(ot, "Outfits")
+        tabs.addTab(people, "People")
 
         self.build_standings_tab(tabs)
 
-        # ---- Status tab: checks and the log, so you do not need a terminal
+        # ---- Help tab: checks and the log, so you do not need a terminal
         stt = QWidget()
         sv = QVBoxLayout(stt)
         self.lbl_checks = QLabel()
@@ -553,7 +623,7 @@ class SettingsDialog(QDialog):
         self.txt_log.setReadOnly(True)
         self.txt_log.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         sv.addWidget(self.txt_log, 1)
-        tabs.addTab(stt, "Status")
+        tabs.addTab(stt, "Help")
         self._tabs = tabs
         self._status_tab = stt
         tabs.currentChanged.connect(lambda _i: self.refresh_status() if tabs.currentWidget() is stt else None)
@@ -623,7 +693,11 @@ class SettingsDialog(QDialog):
         self.cmb_smode.currentIndexChanged.connect(
             lambda _i: (ov.set_setting("standings_mode", self.cmb_smode.currentData()), ov.standings.refresh(True)))
         bl.addWidget(self.cmb_smode)
-        bl.addWidget(QLabel("Google Sheet link, or a file:"))
+        sheetw = QWidget()
+        bl2 = QVBoxLayout(sheetw)
+        bl2.setContentsMargins(0, 0, 0, 0)
+        bl.addWidget(sheetw)
+        bl2.addWidget(QLabel("Google Sheet link, or a file:"))
         row = QHBoxLayout()
         self.ed_sheet = QLineEdit(s.get("standings_sheet", ""))
         self.ed_sheet.setPlaceholderText("Google Sheets link or file path")
@@ -633,13 +707,14 @@ class SettingsDialog(QDialog):
         bf = QPushButton("File...")
         bf.clicked.connect(self.choose_sheet_file)
         row.addWidget(bf)
-        bl.addLayout(row)
+        bl2.addLayout(row)
         note = QLabel("For a Google Sheet: <b>Share</b> &rarr; General access &rarr; <i>Anyone with the link</i> "
                       "&rarr; Viewer. The link of the tab you want (with <i>gid=</i>) picks that tab. "
                       "The program only reads it and checks again every minute.")
         note.setWordWrap(True)
-        bl.addWidget(note)
-        f = QFormLayout()
+        bl2.addWidget(note)
+        cols = Collapsible("Columns (only if the automatic way fails)")
+        f = cols.form()
         self.ed_tab = QLineEdit(s.get("standings_tab", ""))
         self.ed_tab.setPlaceholderText("first tab")
         self.ed_tab.setMinimumWidth(60)
@@ -659,16 +734,16 @@ class SettingsDialog(QDialog):
         self.sp_first.setValue(int(s.get("standings_first_row", 4)))
         self.sp_first.valueChanged.connect(lambda _v: self.apply_sheet())
         f.addRow("First row with a player", self.sp_first)
-        bl.addLayout(f)
+        bl2.addWidget(cols)
         brow = QHBoxLayout()
         btest = QPushButton("Read the sheet now")
         btest.clicked.connect(self.apply_sheet)
         brow.addWidget(btest)
         brow.addStretch(1)
-        bl.addLayout(brow)
+        bl2.addLayout(brow)
         self.lbl_sheet = QLabel("")
         self.lbl_sheet.setWordWrap(True)
-        bl.addWidget(self.lbl_sheet)
+        bl2.addWidget(self.lbl_sheet)
         v.addWidget(box)
 
         rbox = QGroupBox("Rounds (sheet)")
@@ -700,8 +775,8 @@ class SettingsDialog(QDialog):
         rl.addLayout(rf)
         v.addWidget(rbox)
 
-        lbox = QGroupBox("Look")
-        lf = QFormLayout(lbox)
+        lbox = Collapsible("Look of the board: title, borders, avatars, pages")
+        lf = lbox.form()
         ed_title = QLineEdit(s.get("standings_title", "STANDINGS"))
         ed_title.setPlaceholderText("STANDINGS")
         ed_title.editingFinished.connect(lambda: ov.set_setting("standings_title", ed_title.text().strip() or "STANDINGS"))
@@ -731,7 +806,7 @@ class SettingsDialog(QDialog):
         lf.addRow("Shape", cmb_lay)
         cb_av = QCheckBox("Show a picture for every player")
         cb_av.setChecked(bool(s.get("standings_avatars", True)))
-        cb_av.setToolTip("Uses the picture you chose in the Players tab. Without one: the first letter.")
+        cb_av.setToolTip("Uses the picture you chose in the People tab (Players). Without one: the first letter.")
         cb_av.toggled.connect(lambda on: ov.set_setting("standings_avatars", on))
         lf.addRow("Avatars", cb_av)
         sp_rows = QSpinBox()
@@ -771,9 +846,18 @@ class SettingsDialog(QDialog):
         sl.addWidget(pn)
         v.addWidget(sbox)
         v.addStretch(1)
-        self._stand_tab = st
+
+        def sync_smode(*_a):
+            sheet = self.cmb_smode.currentData() == "sheet"
+            sheetw.setVisible(sheet)
+            rbox.setVisible(sheet)
+            sbox.setVisible(not sheet)
+        self.cmb_smode.currentIndexChanged.connect(sync_smode)
+        sync_smode()
+        sc = self.scrolled(st)
+        self._stand_tab = sc
         self.update_book_label()
-        tabs.addTab(self.scrolled(st), "Standings")
+        tabs.addTab(sc, "Points")
 
     def apply_sheet(self):
         ov = self.ov

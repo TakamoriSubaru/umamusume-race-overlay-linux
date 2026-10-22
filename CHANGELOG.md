@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.1
+
+- **Easier settings:** the settings window is tidier for people who never used the overlay. Six tabs now: **Home, Race data, Look, People, Points, Help**.
+- **Home:** a short *Quick start* (3 steps) and the main buttons. Start-up options, picture folders and updates are folded under *More*.
+- **Look:** only the basics are shown (pictures, colour set, text size, tower style, preview). Colours, window and results board options are folded under *More options*.
+- **People:** Players, Umas and Outfits are now one tab with three small tabs inside.
+- **Points:** the sheet settings show only when the source is *A spreadsheet*, and the program's own points box only when it is *Counted by this program*. Column settings and the board look are folded.
+- **Fix:** the sheet status line on the Points tab updates again when the tab is opened.
+- **Note:** nothing was removed and old settings keep working. Tabs were renamed: Races is now *Race data*, Status is now *Help*, Menu is now *Home*, Standings is now *Points*.
+
 ## 1.9.0
 
 - **New:** **small corner tower**. In the Look tab, *Tower style* can be set to a compact tower that shows only the top umas (2 to 10, default 5) with place, picture, name and gap, and a short header with the race clock. At the finish it slides out and the results board comes in, as before. Also in the tray menu and the right-click menu.

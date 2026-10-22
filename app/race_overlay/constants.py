@@ -84,7 +84,7 @@ DEFAULT_SETTINGS = {
     "sub_color": "#9898b8",
     "text_scale": 1.0,
     "font": "",                # "" = default font
-    # --- saved races (Races tab) - these are NOT touched by "Reset look to defaults"
+    # --- saved races (Race data tab) - these are NOT touched by "Reset look to defaults"
     "source": "",              # "" = follow the start script, "live" = Race Overlay server, "watch" = saved races folder
     "saved_races_dir": "",     # folder with your saved race JSON files (empty = the one from settings.sh / --watch)
     "watch_subfolders": True,  # also look inside the folders below it (Career, Room match, ...)
@@ -101,7 +101,7 @@ DEFAULT_SETTINGS = {
     # --- results board (the window that shows after the race)
     "results_board": True,     # show the results board after each race
     "results_seconds": 10.0,   # how long it stays (0 = until the next race starts)
-    # --- points and standings board (Standings tab)
+    # --- points and standings board (Points tab)
     "scoring": True,           # give points after every race: 1st = number of players, last = 1
     "standings_board": True,   # show the standings board after the results board, until the next race
     "standings_mode": "local", # "local" = points counted by this program, "sheet" = read from a sheet
@@ -115,8 +115,9 @@ DEFAULT_SETTINGS = {
     "standings_round_blocks": "auto",   # round views: "auto" finds the tables by their headers, or type the player, uma, points columns of round 1; 2; 3
     "standings_total_cols": "auto",     # combined views: "auto", or the player, round 1, round 2, round 3 columns (Q,R,S,T)
     "standings_layout": "portrait",   # "portrait" = one column, "landscape" = two columns side by side
-    "standings_avatars": True,        # a picture for every player (from the Players tab, else a letter)
+    "standings_avatars": True,        # a picture for every player (from the People tab (Players), else a letter)
     "standings_every": 1,             # show the standings after every N races (0 = only when I show them)
+    "quick_start_open": True,         # Home tab: quick start box open
     "standings_hide_zero": True,        # sheet: players with 0 points are not shown
     "standings_border_values": "9,8,7",  # single rounds: this many points = gold, silver, bronze border
     "standings_top_n": 10,     # combined views and local points: the best N players get a gold border (0 = off)
@@ -133,7 +134,7 @@ KEEP_ON_RESET = ("source", "saved_races_dir", "watch_subfolders", "start_delay",
                  "standings_name_col", "standings_score_col", "standings_uma_col", "standings_first_row",
                  "standings_view", "standings_round_blocks", "standings_total_cols", "standings_border_values",
                  "standings_top_n", "standings_hide_zero", "standings_layout", "standings_avatars", "standings_every",
-                 "standings_title", "standings_rows", "standings_page_seconds", "standings_refresh")
+                 "standings_title", "standings_rows", "standings_page_seconds", "standings_refresh", "quick_start_open")
 
 
 # Colour sets for the Look tab. Each one only changes colours.

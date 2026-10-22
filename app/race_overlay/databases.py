@@ -131,7 +131,7 @@ class UmasDB:
 # Names of alternative outfits, by race dress id. The default outfit of a uma has the dress id
 # chara id * 100 + 1 (for example 100201 = Silence Suzuka) and is shown with just her name.
 # Everything else is an alternative outfit: shown as "Name (Outfit)". You can name more of them
-# in the Outfits tab (they are saved in images/outfits.json).
+# in the People tab (Outfits) (they are saved in images/outfits.json).
 BUILTIN_OUTFITS = {
     105840: "Halloween",      # Meisho Doto
 }
@@ -177,7 +177,7 @@ class OutfitsDB:
         return "%s (%s)" % (name, lab) if lab else name
 
     def touch(self, chara_id, dress_id, uma):
-        """Remember an alternative outfit so it shows up in the Outfits tab. True if it is new."""
+        """Remember an alternative outfit so it shows up in the People tab (Outfits). True if it is new."""
         if not is_alt_outfit(chara_id, dress_id):
             return False
         key = str(int(dress_id))

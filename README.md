@@ -37,7 +37,7 @@
 - [Command line options](#-command-line-options)
 - [Updating](#-updating)
 - [Folder layout](#-folder-layout)
-- [Status tab](#-status-tab-no-terminal-needed)
+- [Help tab](#-help-tab-no-terminal-needed)
 - [Troubleshooting](#-troubleshooting)
 - [Roadmap](#-roadmap)
 - [Disclaimer](#-disclaimer)
@@ -139,10 +139,10 @@ The **results board** is its own window: add a second **Window Capture (Xcomposi
 <img src=".github/docs/settings-players.png" alt="Settings, Players tab" width="520">
 </div>
 
-- **Players tab:** every trainer that appears in a race is added automatically. Select one and press **Choose picture...** (a file) or **Paste link...** (a web address).
+- **People tab, Players:** every trainer that appears in a race is added automatically. Select one and press **Choose picture...** (a file) or **Paste link...** (a web address).
 - **Uma image and player picture are two different pictures.** The uma image belongs to the uma (and its outfit) and is always the same. The player picture belongs to the trainer and follows them, whatever uma they run.
 - **Pictures mode** (Look tab, tray menu, right-click menu, or press **T** to cycle): *Uma image + player picture* (default: big uma image with a small player picture on its corner), *Uma image only*, or *Player picture* (in the big circle, the uma image is used when the player has none). A player without a picture simply shows no small picture.
-- **Umas tab:** every uma that appears in a race is listed with her face. Select one and press **Choose picture...** to use your own, or **Use default face** to go back. Untick *Use the faces from Race Overlay...* to show only your own pictures.
+- **People tab, Umas:** every uma that appears in a race is listed with her face. Select one and press **Choose picture...** to use your own, or **Use default face** to go back. Untick *Use the faces from Race Overlay...* to show only your own pictures.
 - **Uma faces** are found automatically in the `character_thumbs` folder of Race Overlay inside your Wine prefix. If they are not found, copy that folder's content into `images/uma/`. To replace one, put a file named after the card id, chara id or uma name there (for example `100101.png` or `Special Week.png`).
 - **Player pictures** can also be placed by hand in `images/players/`, named after the trainer (for example `Takamori.png`).
 
@@ -163,7 +163,7 @@ The `images/` folder is created next to the program and is not part of this repo
 ## 📂 Saved races folder
 
 <div align="center">
-<img src=".github/docs/settings-races.png" alt="Settings, Races tab" width="520">
+<img src=".github/docs/settings-races.png" alt="Settings, Race data tab" width="520">
 </div>
 
 Open the **Menu** and go to the **Races** tab:
@@ -177,7 +177,7 @@ Good to know:
 - The choice made in Settings wins over `settings.sh` and over `--watch FOLDER`. It is saved in `~/.config/race-overlay-native/config.json`.
 - Files that are not races (for example a list of veterans) are skipped automatically.
 - "Reset look to defaults" does **not** reset your folder or source.
-- A race file is written when the race **loads**, not when it starts. The overlay therefore waits **Start delay** seconds (Races tab, default 12) after it sees a new file before it slides in. If it appears too early, make the delay bigger; too late, smaller. The arrow keys in the overlay window fine-tune it (0.25 s left / right, 1 s down / up). A saved file cannot tell how long you stay on the line-up screen, so this is always an estimate. **Live** mode is exact.
+- A race file is written when the race **loads**, not when it starts. The overlay therefore waits **Start delay** seconds (Race data tab, default 12) after it sees a new file before it slides in. If it appears too early, make the delay bigger; too late, smaller. The arrow keys in the overlay window fine-tune it (0.25 s left / right, 1 s down / up). A saved file cannot tell how long you stay on the line-up screen, so this is always an estimate. **Live** mode is exact.
 
 ---
 
@@ -205,7 +205,7 @@ When the race ends the tower slides out and the results board slides in. It show
 - It is a separate window called **Umamusume Race Results (Linux)**, so you can place it anywhere on the stream, independent of the tower.
 - **Look tab:** turn it on or off, and choose how long it stays (or *Until the next race*). `--hold` keeps it until the next race too.
 - It uses the same colours, font, picture choice (uma / player / both) and slide direction as the tower. The *Accent colour* is the title line and the track name.
-- **Menu tab / tray menu:** *Show results board (to place it)* shows it with sample places, so you can position and style it before any race has been run.
+- **Home tab / tray menu:** *Show results board (to place it)* shows it with sample places, so you can position and style it before any race has been run.
 - Equal finish times share one place. A uma without a finish time shows `--`.
 - `Esc` or right click, *Hide the results board*, closes it early.
 
@@ -304,7 +304,7 @@ app/                      everything that is in the release zip:
     results_board.py          the results board window (after the race)
     frameless.py              shared by both windows: move / resize, slide side, auto size
     settings_dialog.py        the Menu / Settings window
-    diagnostics.py, logbuf.py the Status tab: checks and the log
+    diagnostics.py, logbuf.py the Help tab: checks and the log
     theme.py, tray.py         look of the settings window, tray icon
     updater.py                updating with a backup
     main.py                   command line options and start
@@ -334,7 +334,7 @@ OBS has to see X11 windows too. If **Window Capture (Xcomposite)** is missing in
 
 ---
 
-## 🩺 Status tab (no terminal needed)
+## 🩺 Help tab (no terminal needed)
 
 The **Status** tab in the Menu window shows whether everything works, and a small log, so you never have to open a terminal:
 
@@ -353,12 +353,12 @@ It only shows information. It is not a command line, and it does not change anyt
 | Nothing happens when I double-click the icon | Run `./start_auto.sh` in a terminal and read the error. Also check `/tmp/race-overlay-native.log` if you start it from Steam. |
 | Status stays yellow | The game is not running yet, or its name was not found. The overlay looks for `umamusume` in process names (`GAME_MATCH` in `settings.sh`). |
 | Status is red | Race Overlay is not running or not reachable. Check `/tmp/race-overlay-wine.log` and the paths in `settings.sh`. |
-| `wine: failed to open "C:\Race Overlay\Race Overlay.exe": c0000135` in the log | Wine cannot start Race Overlay. Either it is installed in a different Wine prefix than `WINEPREFIX_DIR` in `settings.sh` (find it with `find ~ -iname "Race Overlay.exe"`), or that prefix is missing a runtime Race Overlay needs. Until it runs, use the **Saved races** source in the Races tab. |
+| `wine: failed to open "C:\Race Overlay\Race Overlay.exe": c0000135` in the log | Wine cannot start Race Overlay. Either it is installed in a different Wine prefix than `WINEPREFIX_DIR` in `settings.sh` (find it with `find ~ -iname "Race Overlay.exe"`), or that prefix is missing a runtime Race Overlay needs. Until it runs, use the **Saved races** source in the Race data tab. |
 | OBS shows a black window | Use `--chroma` with a Chroma Key filter. On Wayland read the [Wayland](#-wayland) section. |
 | OBS cannot find the window | Press **Show overlay window** in the Menu. A hidden window cannot be captured. |
 | No tray icon | Your desktop may not show tray icons. The overlay then stays visible so you can still use it (right-click for the menu). |
 | Faces are letters, not pictures | The `character_thumbs` folder was not found. Copy it into `images/uma/`. |
-| The tower appears before the gates open (saved races) | Raise **Start delay** in the Races tab. It is an estimate: live mode is exact. |
+| The tower appears before the gates open (saved races) | Raise **Start delay** in the Race data tab. It is an estimate: live mode is exact. |
 | The tower appears too late (saved races) | Lower **Start delay**, or nudge with the arrow keys. |
 | I cannot see the overlay window | That is normal before a race: it is hidden until the race starts. Use **Show overlay window (to place it)** in the Menu, or untick **Hide the window until a race starts** in the Look tab. |
 | The results board does not show after a race | Check *Show the results board after each race* in the Look tab. It appears when the tower slides out, so a race that is closed early (no finish) shows none. In OBS it is a second source: **Umamusume Race Results (Linux)**. |
@@ -381,11 +381,11 @@ In the **Standings** tab you choose where the numbers come from:
 - **Counted by this program:** every race you play with it is scored and saved (`scores.json` in the settings folder). *Undo last race*, *Save as .csv* and *New bracket* are there too. Preview races, replays and old race files never give points, and the same race is never counted twice. Players are matched by trainer name.
 - **A spreadsheet:** paste a Google Sheets link (Share -> *Anyone with the link* -> Viewer; the link of the tab you want picks that tab) or choose a `.csv` / `.xlsx` file. Set the columns (player, points, optional uma) and the first row. It is reloaded every minute and only read, never changed.
 
-**Rounds:** in the Standings tab (Rounds section) choose *Round 1*, *Round 2*, *Round 3*, *After Round 2* (rounds 1 + 2) or *Overall Total* (all three). Everything is read from the same sheet tab. The tables are found **automatically by their headers** (*Trainer / Uma / Score* for each round, *Member / Round 1 / Round 2 / Round 3* for the final table), so it also works when Google leaves hidden columns out of the download. You can type the columns by hand instead (for example `B,C,D; G,H,I; L,M,N` and `Q,R,S,T`). While streaming, switch with a right click on the standings board or in the tray menu (*Standings view*). Players with 0 points are not shown (can be turned off).
+**Rounds:** in the Points tab (Rounds section) choose *Round 1*, *Round 2*, *Round 3*, *After Round 2* (rounds 1 + 2) or *Overall Total* (all three). Everything is read from the same sheet tab. The tables are found **automatically by their headers** (*Trainer / Uma / Score* for each round, *Member / Round 1 / Round 2 / Round 3* for the final table), so it also works when Google leaves hidden columns out of the download. You can type the columns by hand instead (for example `B,C,D; G,H,I; L,M,N` and `Q,R,S,T`). While streaming, switch with a right click on the standings board or in the tray menu (*Standings view*). Players with 0 points are not shown (can be turned off).
 
 **Borders:** in a single round, players with **9 points get a gold border, 8 silver and 7 bronze** (the three numbers can be changed). When rounds are added up, the **best N players** (default 10, changeable) get a gold border.
 
-**Look and timing:** every player gets an **avatar** (the picture from the Players tab, else the first letter). *Shape* switches between **portrait** (one column) and **landscape** (two columns). *Show it after every N races* (for example 5) decides when the standings come in by themselves; *never* means only when you press *Show / hide the standings now* (Standings tab or tray menu).
+**Look and timing:** every player gets an **avatar** (the picture from the People tab (Players), else the first letter). *Shape* switches between **portrait** (one column) and **landscape** (two columns). *Show it after every N races* (for example 5) decides when the standings come in by themselves; *never* means only when you press *Show / hide the standings now* (Points tab or tray menu).
 
 Use *Show standings board (to place it)* in the Menu to put the window where you want it on the stream.
 

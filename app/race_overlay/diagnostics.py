@@ -88,7 +88,7 @@ def run_checks(ov):
                         "" if races else "No race files in it yet."))
         else:
             out.append(("bad", "Saved races folder not found: %s" % (folder or "(none chosen)"),
-                        "Choose it in the Races tab."))
+                        "Choose it in the Race data tab."))
     else:
         out.append(("info", "Source: %s" % kind, ""))
 
@@ -99,7 +99,7 @@ def run_checks(ov):
 
     if ov.thumbs.use_default and not ov.thumbs.extra_dirs:
         out.append(("warn", "No default uma faces found",
-                    "Choose your own pictures in the Umas tab, or put Race Overlay in a place the program can find."))
+                    "Choose your own pictures in the People tab (Umas), or put Race Overlay in a place the program can find."))
     elif ov.thumbs.use_default:
         out.append(("ok", "Default uma faces found", ""))
     out.append(("info", "Status: %s" % ov.status_summary(), ""))

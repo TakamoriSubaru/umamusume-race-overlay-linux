@@ -367,7 +367,7 @@ class WatchThread(ReplayBase):
                 seen_size = None
                 first = False
             if not self.folder:
-                self._say("Saved races folder not found.\nChoose it in the menu (Races tab, Browse).")
+                self._say("Saved races folder not found.\nChoose it in the menu (Race data tab, Browse).")
                 self._sleep(1.0)
                 continue
             if not os.path.isdir(self.folder):

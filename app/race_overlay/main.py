@@ -65,7 +65,7 @@ def main():
     ap.add_argument("--keep-wayland", action="store_true",
                     help="on a Wayland desktop, do not switch to XWayland (windows then cannot stay on top)")
     args = ap.parse_args()
-    logbuf.install()          # remembers what the program prints, for the Status tab
+    logbuf.install()          # remembers what the program prints, for the Help tab
 
     note = prefer_xwayland(args)
     if note:

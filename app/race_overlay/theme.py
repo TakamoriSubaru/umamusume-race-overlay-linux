@@ -70,6 +70,9 @@ QPushButton:pressed { background: %(pink)s; color: #2a1020; }
 QPushButton:disabled { color: #7a7296; background: %(card)s; border-color: %(line)s; }
 QPushButton#primary { background: %(grad)s; color: #2a1020; border: none; }
 QPushButton#primary:hover { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #ff86bd, stop:1 #ffb085); }
+QPushButton#fold { text-align: left; background: transparent; border: none; color: %(yellow)s;
+                   font-weight: 800; padding: 8px 4px; }
+QPushButton#fold:hover { color: #ffffff; }
 QPushButton#danger { background: #3a1f33; border-color: #7a3a63; color: #ffc2dc; }
 QPushButton#danger:hover { background: #5a2850; border-color: %(pink)s; }
 QLineEdit, QComboBox, QFontComboBox, QSpinBox, QDoubleSpinBox { background: %(input)s; border: 1px solid #4a4068; border-radius: 10px;
