@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.2
+
+- **New:** **skill luck board**. After the results board it shows the **luckiest** and the **unluckiest** players: how many of the skills they brought activated (for example 13/16), who missed the most, and who hit every skill. Its own window for OBS: *Umamusume Skill Luck (Linux)*. Turn it on in the Look tab (*More options*) and choose how many players are shown on each side. *Show skill luck board (to place it)* is in the Home tab and the tray menu.
+- **Note:** off by default. It needs the equipped skills, which saved race files contain. Without them it counts only the skills that activated.
+
 ## 1.9.1
 
 - **Easier settings:** the settings window is tidier for people who never used the overlay. Six tabs now: **Home, Race data, Look, People, Points, Help**.

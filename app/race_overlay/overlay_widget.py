@@ -41,6 +41,8 @@ from .scoring import ScoreBook, points_for
 from .settings_dialog import SettingsDialog
 from .simdata import parse_sim
 from .sources import TestReplayThread, WatchThread, choose_source
+from .luck import luck_table, pick, skill_ids
+from .luck_board import LuckBoard
 from .standings_board import StandingsBoard
 from .tray import make_tray_icon
 from .updater import restart_program
@@ -57,6 +59,7 @@ class Horse:
         self.gate = r.get("gate") or 0
         self.chara_id = r.get("charaId") or (r.get("dressId", 0) // 100 if r.get("dressId") else 0)
         self.dress_id = int(r.get("dressId") or 0)
+        self.skills = skill_ids(r.get("skills") or r.get("skill_array"))     # equipped skills, when known
         self.label = self.name          # what is shown: "Name" or "Name (Outfit)"
         self.card_id = 0
         self.pkey = None
@@ -163,6 +166,8 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.test_thread = None                 # "Replay a saved race (test)"
         self.book = ScoreBook()                 # points of every race (scores.json)
         self.standings = StandingsBoard(self)
+        self.luck = LuckBoard(self)
+        self.skill_acts = {}                    # {horse index: [skill ids that activated]}
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
@@ -268,6 +273,8 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.board_done = False
         self.board.dismiss()                 # the results of the last race go away
         self.standings.dismiss()
+        self.luck.dismiss()
+        self.skill_acts = sim.get("skills") or {}
         self.horses = self.build_horses(payload, rmap)
 
         if collect:   # remember every trainer we see, so you can give them a picture
@@ -304,6 +311,8 @@ class OverlayWidget(FramelessMixin, QWidget):
         for i, r in enumerate(payload.get("runners") or []):
             h = Horse(r, i)
             rm = rmap.get(h.id) or by_chara.get(h.chara_id) or {}
+            if not h.skills:
+                h.skills = skill_ids(rm.get("skills") or rm.get("skill_array"))
             chara = rm.get("chara_id") or h.chara_id
             h.chara_id = chara
             h.card_id = rm.get("card_id") or (chara * 100 + 1 if chara else 0)
@@ -411,6 +420,7 @@ class OverlayWidget(FramelessMixin, QWidget):
                 h.y += (h.target - h.y) * k
         self.board.tick(now, dt)
         self.standings.tick(now, dt)
+        self.luck.tick(now, dt)
         self.update()
 
     # ----- tower maths (port of renderTime) ------------------------------------
@@ -869,6 +879,8 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.act_stand = m.addAction("Show standings board (to place it)",
                                      lambda: self.set_standings_pinned(not self.standings.pinned))
         m.addAction("Show / hide the standings now", self.show_standings_now)
+        self.act_luck = m.addAction("Show skill luck board (to place it)",
+                                    lambda: self.set_luck_pinned(not self.luck.pinned))
         m.addAction("Replay a saved race (test)...", self.test_replay)
         self.act_compact = m.addAction("Small corner tower (top 5 only)")
         self.act_compact.setCheckable(True)
@@ -905,6 +917,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.act_show.setText("Hide overlay window" if self.window_wanted() else "Show overlay window")
         self.act_board.setText("Hide results board" if self.board.pinned else "Show results board (to place it)")
         self.act_stand.setText("Hide standings board" if self.standings.pinned else "Show standings board (to place it)")
+        self.act_luck.setText("Hide skill luck board" if self.luck.pinned else "Show skill luck board (to place it)")
         self.act_prev.setChecked(self.preview)
         self.act_compact.setChecked(self.compact())
         for mode, act in self.pic_actions.items():
@@ -940,6 +953,8 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.board.remember()
         if self.standings.isVisible() or self.standings.entries:
             self.standings.remember()
+        if self.luck.isVisible() or self.luck.entries:
+            self.luck.remember()
         save_config(self.cfg)
         try:
             self.source.stop()
@@ -960,6 +975,8 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.board.remember()
         if self.standings.isVisible() or self.standings.entries:
             self.standings.remember()
+        if self.luck.isVisible() or self.luck.entries:
+            self.luck.remember()
         save_config(self.cfg)
         try:
             self.source.stop()
@@ -973,6 +990,7 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.tray.hide()
         self.board.close()
         self.standings.close()
+        self.luck.close()
         if self.s.get("stop_server", True):
             stop_started_server()
         self.close()
@@ -1253,6 +1271,15 @@ class OverlayWidget(FramelessMixin, QWidget):
         shown = bool(self.s.get("results_board", True))
         if shown:
             self.board.present(entries, line1, delay)
+        luck_at = delay + (float(self.s.get("results_seconds", 10.0)) + SLIDE_SECONDS + 0.2 if shown else 0.0)
+        luck_len = 0.0
+        if self.s.get("luck_board", False) and not self.args.hold and (not shown or not self.board.hold_forever()):
+            luck_entries, luck_footer = self.luck_entries()
+            if luck_entries:
+                self.luck.present(luck_entries, luck_footer, luck_at)
+                luck_len = float(self.s.get("results_seconds", 10.0)) + SLIDE_SECONDS + 0.2
+                if self.luck.hold_forever():
+                    luck_len = 0.0
         if self.s.get("standings_board", True) and counts and not self.args.hold:
             every = int(self.s.get("standings_every", 1) or 0)        # 0 = only when you show it yourself
             done = int(self.cfg.get("races_since_standings", 0)) + 1
@@ -1263,7 +1290,42 @@ class OverlayWidget(FramelessMixin, QWidget):
             if not shown:
                 stay = 0.0
             if due and (stay > 0 or not shown):
-                self.standings.present(delay=delay + stay + SLIDE_SECONDS + 0.2)
+                self.standings.present(delay=delay + stay + SLIDE_SECONDS + 0.2 + luck_len)
+
+    def luck_entries(self):
+        """(entries, footer) for the skill luck board of the race that just ran; ([], "") without skill data."""
+        if not self.skill_acts:
+            return [], ""
+        rows = luck_table(self.horses, self.skill_acts)
+        lucky, unlucky, all_hit = pick(rows, int(self.s.get("luck_rows", 3) or 3))
+        out = []
+        for place, r in enumerate(lucky, 1):
+            out.append(dict(r, side="lucky", place=place))
+        for place, r in enumerate(unlucky, 1):
+            out.append(dict(r, side="unlucky", place=place))
+        if all_hit:
+            footer = "Hit every skill: " + ", ".join(all_hit[:3]) + (" +%d" % (len(all_hit) - 3) if len(all_hit) > 3 else "")
+        else:
+            known = any(r["total"] for r in rows)
+            footer = "Skills that activated, out of the skills equipped" if known else "Skills that activated"
+        return out, footer
+
+    def sample_luck(self):
+        """Made-up luck, to place and style the board before any race has been run."""
+        sim, payload, rmap, _fins = self.build_preview_race()
+        horses = self.build_horses(payload, rmap)
+        rows = [{"h": h, "hit": 15 - 2 * i if i < 3 else 2 + i, "total": 15, "missed": 0}
+                for i, h in enumerate(horses)]
+        for r in rows:
+            r["missed"] = r["total"] - r["hit"]
+        lucky, unlucky, _all = pick(rows, int(self.s.get("luck_rows", 3) or 3))
+        out = [dict(r, side="lucky", place=i) for i, r in enumerate(lucky, 1)]
+        out += [dict(r, side="unlucky", place=i) for i, r in enumerate(unlucky, 1)]
+        return out, "Skills that activated, out of the skills equipped"
+
+    def set_luck_pinned(self, on):
+        self.luck.set_pinned(on, self.sample_luck() if on and not self.luck.entries else None)
+        self.refresh_tray()
 
     def results_entries(self):
         """Final placings, best first: place (ties share one), finish time and the gap to the winner."""

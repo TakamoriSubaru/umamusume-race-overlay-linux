@@ -8,6 +8,7 @@ import urllib.request
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from .constants import TRACK_NAMES
+from .luck import skill_ids
 from .simdata import parse_sim
 from .util import _safe_listdir, http_get, process_running
 
@@ -138,6 +139,7 @@ def payload_from_saved_race(path):
             "name": h["charaName"], "trainer": h.get("trainerName", ""),
             "style": rd.get("running_style", 2), "gate": h.get("postNumber", fo),
             "frameOrder": fo, "charaId": h["charaId"], "dressId": h.get("raceDressId", 0),
+            "skills": skill_ids(rd.get("skill_array")),
         })
         rmap[fo] = {
             "fo": fo, "chara_id": h["charaId"], "card_id": rd.get("card_id", h["charaId"] * 100 + 1),

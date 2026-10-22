@@ -58,6 +58,7 @@ def parse_sim(b64):
         o += frame_size
 
     results = []
+    skills = {}          # {horse index: [skill id, ...]} every skill that really activated, in order
     try:
         pad2 = i32(o)
         if 0 <= pad2 < 65536:
@@ -73,7 +74,42 @@ def parse_sim(b64):
                     "finishTimeRaw": f32(o + 27),
                 })
                 o += r_size
+            skills = _skill_events(buf, o, horse_num)
     except Exception:
         pass
 
-    return {"times": times, "frames": frames, "results": results, "horseNum": horse_num}
+    return {"times": times, "frames": frames, "results": results, "horseNum": horse_num, "skills": skills}
+
+
+def _skill_events(buf, o, horse_num):
+    """The event list that follows the placings: size-prefixed events (time, type, parameters).
+    Type 3 = a skill activated: parameter 0 is the horse index, parameter 1 the skill id.
+    Any surprise (a different layout) just gives no skills, never an error."""
+    out = {}
+    try:
+        n = len(buf)
+        pad3 = struct.unpack_from("<i", buf, o)[0]
+        if not 0 <= pad3 < 65536:
+            return out
+        o += 4 + pad3
+        count = struct.unpack_from("<i", buf, o)[0]
+        o += 4
+        if not 0 <= count <= 20000:
+            return out
+        for _ in range(count):
+            if o + 8 > n:
+                break
+            size = struct.unpack_from("<h", buf, o)[0]
+            if size < 6 or o + 2 + size > n:
+                break
+            etype, pc = buf[o + 6], buf[o + 7]
+            if etype == 3 and pc >= 2 and 8 + 4 * pc <= 2 + size:
+                horse, skill = struct.unpack_from("<ii", buf, o + 8)
+                if 0 <= horse < horse_num and skill > 0:
+                    lst = out.setdefault(horse, [])
+                    if skill not in lst:
+                        lst.append(skill)
+            o += 2 + size
+    except Exception:
+        pass
+    return out

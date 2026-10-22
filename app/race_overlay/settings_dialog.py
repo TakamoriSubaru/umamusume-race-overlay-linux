@@ -165,6 +165,9 @@ class SettingsDialog(QDialog):
         row_c.addWidget(self.btn_board)
         row_c.addWidget(self.btn_stand)
         bxl.addLayout(row_c)
+        self.btn_luck = QPushButton("Show skill luck board (to place it)")
+        self.btn_luck.clicked.connect(lambda: ov.set_luck_pinned(not ov.luck.pinned))
+        bxl.addWidget(self.btn_luck)
         self.btn_test = QPushButton("Replay a saved race (test, no game needed)...")
         self.btn_test.clicked.connect(lambda: ov.test_replay())
         bxl.addWidget(self.btn_test)
@@ -483,6 +486,18 @@ class SettingsDialog(QDialog):
         self.sp_board.setValue(float(s.get("results_seconds", 10.0)))
         self.sp_board.valueChanged.connect(lambda v: ov.set_setting("results_seconds", float(v)))
         f2.addRow("Results board stays", self.sp_board)
+        self.cb_luck = QCheckBox("Show the skill luck board after the results (luckiest / unluckiest)")
+        self.cb_luck.setChecked(bool(s.get("luck_board", False)))
+        self.cb_luck.setToolTip("Needs the race data to list each player's skills: saved races do. "
+                                "In OBS it is its own window: Umamusume Skill Luck (Linux).")
+        self.cb_luck.toggled.connect(lambda on: ov.set_setting("luck_board", on))
+        f2.addRow("Skill luck board", self.cb_luck)
+        self.sp_luck = QSpinBox()
+        self.sp_luck.setRange(1, 5)
+        self.sp_luck.setSuffix(" players")
+        self.sp_luck.setValue(int(s.get("luck_rows", 3)))
+        self.sp_luck.valueChanged.connect(lambda v: ov.set_setting("luck_rows", int(v)))
+        f2.addRow("Luck board shows", self.sp_luck)
 
         self.cb_prev = QCheckBox("Show a preview race (to see your changes)")
         self.cb_prev.toggled.connect(ov.set_preview)
@@ -1181,6 +1196,8 @@ class SettingsDialog(QDialog):
                                else "Show results board (to place it)")
         self.btn_stand.setText("Done placing: hide the standings board" if ov.standings.pinned
                                else "Show standings board (to place it)")
+        self.btn_luck.setText("Done placing: hide the skill luck board" if ov.luck.pinned
+                              else "Show skill luck board (to place it)")
         if self.isVisible() and self._tabs.currentWidget() is self._stand_tab:
             self.lbl_sheet.setText(ov.standings.status or "")
             self.update_book_label()

@@ -8,6 +8,7 @@ APP_NAME = "Umamusume Race Overlay (Linux)"
 
 
 STANDINGS_NAME = "Umamusume Standings (Linux)"     # window name of the standings board (pick it in OBS)
+LUCK_NAME = "Umamusume Skill Luck (Linux)"        # window name of the skill luck board (pick it in OBS)
 RESULTS_NAME = "Umamusume Race Results (Linux)"   # window name of the results board (pick it in OBS)
 
 
@@ -117,6 +118,8 @@ DEFAULT_SETTINGS = {
     "standings_layout": "portrait",   # "portrait" = one column, "landscape" = two columns side by side
     "standings_avatars": True,        # a picture for every player (from the People tab (Players), else a letter)
     "standings_every": 1,             # show the standings after every N races (0 = only when I show them)
+    "luck_board": False,              # show the skill luck board (luckiest / unluckiest) after the results board
+    "luck_rows": 3,                   # players shown on each side of the luck board
     "quick_start_open": True,         # Home tab: quick start box open
     "standings_hide_zero": True,        # sheet: players with 0 points are not shown
     "standings_border_values": "9,8,7",  # single rounds: this many points = gold, silver, bronze border
@@ -134,7 +137,7 @@ KEEP_ON_RESET = ("source", "saved_races_dir", "watch_subfolders", "start_delay",
                  "standings_name_col", "standings_score_col", "standings_uma_col", "standings_first_row",
                  "standings_view", "standings_round_blocks", "standings_total_cols", "standings_border_values",
                  "standings_top_n", "standings_hide_zero", "standings_layout", "standings_avatars", "standings_every",
-                 "standings_title", "standings_rows", "standings_page_seconds", "standings_refresh", "quick_start_open")
+                 "standings_title", "standings_rows", "standings_page_seconds", "standings_refresh", "quick_start_open", "luck_board")
 
 
 # Colour sets for the Look tab. Each one only changes colours.
