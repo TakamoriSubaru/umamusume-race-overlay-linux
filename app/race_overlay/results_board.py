@@ -268,6 +268,11 @@ class ResultsBoard(FramelessMixin, QWidget):
             win = QColor(ac)
             win.setAlpha(40)
             p.fillPath(row, win)
+        team_col = QColor(ent["team_color"]) if ent.get("team_color") else None
+        if team_col is not None:                      # team match: the row is tinted in the team colour
+            tint = QColor(team_col)
+            tint.setAlpha(56)
+            p.fillPath(row, tint)
         if podium is not None:
             strip = QPainterPath()
             strip.addRoundedRect(QRectF(x, y + 5, 3.5, rh - 10), 1.75, 1.75)
@@ -314,7 +319,7 @@ class ResultsBoard(FramelessMixin, QWidget):
         tx = x + self.col_w - time_w - 8 - pw
         if pw:
             p.setFont(ov.fnt(17, True, mono=True))
-            p.setPen(ac if place == 1 else tc)
+            p.setPen(team_col if team_col is not None else (ac if place == 1 else tc))
             p.drawText(QRectF(x + self.col_w - pw - 6, y, pw, rh),
                        Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, str(ent["pts"]))
         details = ov.s.get("results_details", "both")

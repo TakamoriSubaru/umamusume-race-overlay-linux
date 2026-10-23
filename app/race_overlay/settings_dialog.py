@@ -168,6 +168,9 @@ class SettingsDialog(QDialog):
         self.btn_luck = QPushButton("Show skill luck board (to place it)")
         self.btn_luck.clicked.connect(lambda: ov.set_luck_pinned(not ov.luck.pinned))
         bxl.addWidget(self.btn_luck)
+        self.btn_match = QPushButton("Show match board (to place it)")
+        self.btn_match.clicked.connect(lambda: ov.set_match_pinned(not ov.mboard.pinned))
+        bxl.addWidget(self.btn_match)
         self.btn_test = QPushButton("Replay a saved race (test, no game needed)...")
         self.btn_test.clicked.connect(lambda: ov.test_replay())
         bxl.addWidget(self.btn_test)
@@ -649,6 +652,7 @@ class SettingsDialog(QDialog):
         tabs.addTab(people, "People")
 
         self.build_standings_tab(tabs)
+        self.build_draft_tab(tabs)
 
         # ---- Help tab: checks and the log, so you do not need a terminal
         stt = QWidget()
@@ -916,6 +920,216 @@ class SettingsDialog(QDialog):
         self._stand_tab = sc
         self.update_book_label()
         tabs.addTab(sc, "Points")
+
+    # ---- draft tab (team match)
+    def build_draft_tab(self, tabs):
+        ov, s = self.ov, self.ov.s
+        m = ov.match
+        dt = QWidget()
+        v = QVBoxLayout(dt)
+        intro = QLabel("A <b>team match</b> (draft): two teams, a few players each. After every race the best placed "
+                       "<b>team players</b> score for their team: <b>1st 4 points, 2nd 2, 3rd 1</b> (you can change "
+                       "it). Players on no team (NPCs) never score, so the next team player takes the placement. "
+                       "The first team to reach the target wins. In OBS the board is its own window: "
+                       "<i>Umamusume Match (Linux)</i>.")
+        intro.setWordWrap(True)
+        v.addWidget(intro)
+
+        cb = QCheckBox("Team match mode (points go to the teams; single-player points and standings pause)")
+        cb.setChecked(bool(s.get("match_mode", False)))
+        cb.toggled.connect(lambda on: ov.set_setting("match_mode", on))
+        v.addWidget(cb)
+        cb2 = QCheckBox("Show the match board after the results board (stays until the next race)")
+        cb2.setChecked(bool(s.get("match_board", True)))
+        cb2.toggled.connect(lambda on: ov.set_setting("match_board", on))
+        v.addWidget(cb2)
+
+        rf = QFormLayout()
+        sp_t = QSpinBox()
+        sp_t.setRange(1, 999)
+        sp_t.setSuffix(" points")
+        sp_t.setValue(int(m.target))
+        sp_t.valueChanged.connect(lambda x: (m.set_rules(target=int(x)), ov.mboard.refresh()))
+        rf.addRow("First team to reach", sp_t)
+        ed_p = QLineEdit(",".join(str(x) for x in m.points))
+        ed_p.setMaximumWidth(140)
+        ed_p.setToolTip("Points for the 1st, 2nd, 3rd ... team player, for example 4,2,1")
+        ed_p.editingFinished.connect(lambda: (m.set_rules(points=ed_p.text()),
+                                              ed_p.setText(",".join(str(x) for x in m.points)),
+                                              self.update_match_label()))
+        rf.addRow("Points for 1st, 2nd, 3rd", ed_p)
+        v.addLayout(rf)
+
+        self._team_edits = []
+        for i in range(2):
+            box = QGroupBox("Team %d" % (i + 1))
+            bl = QVBoxLayout(box)
+            top = QHBoxLayout()
+            ed_n = QLineEdit(m.teams[i]["name"])
+            ed_n.setPlaceholderText("Team name")
+            ed_n.setMinimumWidth(80)
+            btn_c = QPushButton()
+            btn_c.setMaximumWidth(110)
+            self.swatch(btn_c, m.teams[i]["color"])
+            top.addWidget(ed_n, 1)
+            top.addWidget(btn_c)
+            bl.addLayout(top)
+            pl = QHBoxLayout()
+            col1, col2 = QVBoxLayout(), QVBoxLayout()
+            col1.addWidget(QLabel("Players (trainer names, one per line)"))
+            ed_pl = QPlainTextEdit("\n".join(m.teams[i]["players"]))
+            ed_pl.setFixedHeight(92)
+            col1.addWidget(ed_pl)
+            b_add = QPushButton("Add a player seen in a race...")
+            col1.addWidget(b_add)
+            col2.addWidget(QLabel("Drafted umas (one per line)"))
+            ed_pk = QPlainTextEdit("\n".join(m.teams[i]["picks"]))
+            ed_pk.setFixedHeight(92)
+            col2.addWidget(ed_pk)
+            b_pk = QPushButton("Add a uma...")
+            col2.addWidget(b_pk)
+            pl.addLayout(col1)
+            pl.addLayout(col2)
+            bl.addLayout(pl)
+            v.addWidget(box)
+
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.setInterval(500)
+
+            def save(i=i, ed_n=ed_n, ed_pl=ed_pl, ed_pk=ed_pk):
+                m.set_team(i, name=ed_n.text(), players=ed_pl.toPlainText(), picks=ed_pk.toPlainText())
+                ov.mboard.refresh()
+                self.update_match_label()
+            timer.timeout.connect(save)
+            for w in (ed_n, ed_pl, ed_pk):
+                w.textChanged.connect(lambda *_a, t=timer: t.start())
+            btn_c.clicked.connect(lambda _c=False, i=i, b=btn_c: self.pick_team_color(i, b))
+            b_add.clicked.connect(lambda _c=False, ed=ed_pl: self.add_seen_player(ed))
+            b_pk.clicked.connect(lambda _c=False, ed=ed_pk: self.add_seen_uma(ed))
+            self._team_edits.append((ed_n, ed_pl, ed_pk))
+
+        sbox = QGroupBox("Score")
+        sl = QVBoxLayout(sbox)
+        self.lbl_match = QLabel()
+        self.lbl_match.setWordWrap(True)
+        sl.addWidget(self.lbl_match)
+        r1 = QHBoxLayout()
+        b_undo = QPushButton("Undo last race")
+        b_undo.clicked.connect(self.match_undo)
+        b_adj = QPushButton("Add or take points...")
+        b_adj.setToolTip("A ruling by hand: a remake, a penalty, a disconnect that was ruled on.")
+        b_adj.clicked.connect(self.match_adjust)
+        b_new = QPushButton("New match")
+        b_new.setToolTip("Forget all races and rulings. The teams, players and drafted umas stay.")
+        b_new.clicked.connect(self.match_new)
+        b_exp = QPushButton("Save as .csv...")
+        b_exp.clicked.connect(self.match_export)
+        for b in (b_undo, b_adj, b_new, b_exp):
+            b.setMinimumWidth(10)
+            r1.addWidget(b)
+        sl.addLayout(r1)
+        nn = QLabel("<i>Players are matched by trainer name (capital letters do not matter). Replays, previews and "
+                    "old race files never give points, and the same race is never counted twice.</i>")
+        nn.setWordWrap(True)
+        sl.addWidget(nn)
+        v.addWidget(sbox)
+
+        gl = QGroupBox("Board")
+        gf = QFormLayout(gl)
+        ed_bt = QLineEdit(s.get("match_title", ""))
+        ed_bt.setPlaceholderText("TEAM MATCH")
+        ed_bt.editingFinished.connect(lambda: (ov.set_setting("match_title", ed_bt.text().strip()), ov.mboard.update()))
+        gf.addRow("Title", ed_bt)
+        cb_pk = QCheckBox("Show the drafted umas")
+        cb_pk.setChecked(bool(s.get("match_show_picks", True)))
+        cb_pk.toggled.connect(lambda on: (ov.set_setting("match_show_picks", on), ov.mboard.refresh()))
+        gf.addRow("Drafted umas", cb_pk)
+        sp_ms = QDoubleSpinBox()
+        sp_ms.setRange(0.0, 300.0)
+        sp_ms.setDecimals(0)
+        sp_ms.setSpecialValueText("Until the next race")
+        sp_ms.setSuffix(" seconds")
+        sp_ms.setValue(float(s.get("match_seconds", 0.0)))
+        sp_ms.valueChanged.connect(lambda x: ov.set_setting("match_seconds", float(x)))
+        gf.addRow("Stays", sp_ms)
+        v.addWidget(gl)
+        v.addStretch(1)
+        sc = self.scrolled(dt)
+        self._draft_tab = sc
+        self.update_match_label()
+        tabs.addTab(sc, "Draft")
+
+    def pick_team_color(self, i, btn):
+        c = QColorDialog.getColor(QColor(self.ov.match.teams[i]["color"]), self, "Team colour")
+        if c.isValid():
+            self.ov.match.set_team(i, color=c.name())
+            self.swatch(btn, c.name())
+            self.ov.mboard.refresh()
+
+    def add_seen_player(self, ed):
+        names = [n for n, _d in self.ov.players.rows()]
+        if not names:
+            QMessageBox.information(self, "No players yet", "Players show up here after the overlay has seen a race. "
+                                    "You can also type the trainer names, one per line.")
+            return
+        name, ok = QInputDialog.getItem(self, "Add a player", "Trainer seen in a race:", names, 0, False)
+        if ok and name:
+            ed.setPlainText((ed.toPlainText().rstrip() + "\n" + name).strip())
+
+    def add_seen_uma(self, ed):
+        names = sorted({r[2] for r in self.ov.umas.rows() if r[2]})
+        if names:
+            name, ok = QInputDialog.getItem(self, "Add a uma", "Uma:", names, 0, True)
+        else:
+            name, ok = QInputDialog.getText(self, "Add a uma", "Uma name:")
+        if ok and name.strip():
+            ed.setPlainText((ed.toPlainText().rstrip() + "\n" + name.strip()).strip())
+
+    def update_match_label(self):
+        m = self.ov.match
+        a, b = m.totals()
+        w = m.winner()
+        text = "<b>%s</b> %d &nbsp;:&nbsp; %d <b>%s</b> &nbsp; (first to %d)" % (
+            m.teams[0]["name"], a, b, m.teams[1]["name"], m.target)
+        if w is not None:
+            text += "<br><b>%s wins!</b>" % m.teams[w]["name"]
+        rows = m.race_rows()
+        text += "<br>" + (", ".join("%s %+d / %+d" % (lab, da, db) if lab == "Ruling" else "%s %d / %d" % (lab, da, db)
+                                    for lab, da, db in rows) if rows else "No race scored yet.")
+        if not m.ready():
+            text += "<br><i>Add at least one player to each team, or nobody will score.</i>"
+        self.lbl_match.setText(text)
+
+    def match_undo(self):
+        if self.ov.match.undo_last():
+            self.ov.mboard.refresh()
+        self.update_match_label()
+
+    def match_adjust(self):
+        m = self.ov.match
+        team, ok = QInputDialog.getItem(self, "Add or take points", "Team:", [t["name"] for t in m.teams], 0, False)
+        if not ok:
+            return
+        pts, ok = QInputDialog.getInt(self, "Add or take points", "Points (negative takes away):", 1, -999, 999)
+        if not ok or pts == 0:
+            return
+        note, _ok = QInputDialog.getText(self, "Add or take points", "Reason (optional):")
+        m.adjust([t["name"] for t in m.teams].index(team), pts, note)
+        self.ov.mboard.refresh()
+        self.update_match_label()
+
+    def match_new(self):
+        if QMessageBox.question(self, "New match", "Forget all races and rulings of this match?\n"
+                                "The teams, players and drafted umas stay.") == QMessageBox.StandardButton.Yes:
+            self.ov.match.new_match()
+            self.ov.mboard.refresh()
+            self.update_match_label()
+
+    def match_export(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Save the match as .csv", "match.csv", "CSV (*.csv)")
+        if path:
+            self.ov.match.export_csv(path)
 
     def apply_sheet(self):
         ov = self.ov
@@ -1241,6 +1455,10 @@ class SettingsDialog(QDialog):
                                else "Show standings board (to place it)")
         self.btn_luck.setText("Done placing: hide the skill luck board" if ov.luck.pinned
                               else "Show skill luck board (to place it)")
+        self.btn_match.setText("Done placing: hide the match board" if ov.mboard.pinned
+                               else "Show match board (to place it)")
+        if self.isVisible() and self._tabs.currentWidget() is self._draft_tab:
+            self.update_match_label()
         if self.isVisible() and self._tabs.currentWidget() is self._stand_tab:
             self.lbl_sheet.setText(ov.standings.status or "")
             self.update_book_label()

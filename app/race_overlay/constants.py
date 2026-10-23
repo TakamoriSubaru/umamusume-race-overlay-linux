@@ -8,6 +8,7 @@ APP_NAME = "Umamusume Race Overlay (Linux)"
 
 
 STANDINGS_NAME = "Umamusume Standings (Linux)"     # window name of the standings board (pick it in OBS)
+MATCH_NAME = "Umamusume Match (Linux)"            # window name of the team match board (pick it in OBS)
 LUCK_NAME = "Umamusume Skill Luck (Linux)"        # window name of the skill luck board (pick it in OBS)
 RESULTS_NAME = "Umamusume Race Results (Linux)"   # window name of the results board (pick it in OBS)
 
@@ -118,6 +119,11 @@ DEFAULT_SETTINGS = {
     "standings_layout": "portrait",   # "portrait" = one column, "landscape" = two columns side by side
     "standings_avatars": True,        # a picture for every player (from the People tab (Players), else a letter)
     "standings_every": 1,             # show the standings after every N races (0 = only when I show them)
+    "match_mode": False,              # team match (draft): points go to teams, not to single players
+    "match_board": True,              # show the match board after the results board
+    "match_seconds": 0.0,             # how long the match board stays (0 = until the next race)
+    "match_title": "",                # own title for the match board ("" = TEAM MATCH)
+    "match_show_picks": True,         # match board: the umas each team drafted
     "luck_board": False,              # show the skill luck board (luckiest / unluckiest) after the results board
     "results_title": "",              # own title for the results board ("" = RACE RESULTS)
     "results_details": "both",        # results board: "both" (time + gap), "time", "none"
@@ -142,7 +148,7 @@ KEEP_ON_RESET = ("source", "saved_races_dir", "watch_subfolders", "start_delay",
                  "standings_view", "standings_round_blocks", "standings_total_cols", "standings_border_values",
                  "standings_top_n", "standings_hide_zero", "standings_layout", "standings_avatars", "standings_every",
                  "standings_title", "standings_rows", "standings_page_seconds", "standings_refresh", "quick_start_open", "luck_board",
-                 "luck_seconds")
+                 "luck_seconds", "match_mode", "match_board", "match_seconds", "match_title", "match_show_picks")
 
 
 # Colour sets for the Look tab. Each one only changes colours.

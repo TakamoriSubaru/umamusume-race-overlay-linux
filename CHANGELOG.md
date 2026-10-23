@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.4
+
+- **New:** **team match (draft)**, for team events. The new **Draft** tab holds two teams (name, colour, players, drafted umas). After every race the best placed team players score for their team (**4 / 2 / 1** points, changeable) and the first team to reach the target (**25**, changeable) wins. Players on no team (NPCs) never score; the next team player takes the placement.
+- **New:** **match board**, its own OBS window *Umamusume Match (Linux)*: both scores with a progress bar, the points of every race, the drafted umas and *TEAM X WINS!*. It comes in after the results board and stays until the next race. *Show match board (to place it)* is in the Home tab and the tray menu.
+- **New:** on the results board the rows are tinted in the team colour and the PTS column shows the team points.
+- **New:** *Undo last race*, *Add or take points...* (rulings by hand), *New match* and *Save as .csv...*. Saved in `match.json`.
+- **Note:** off by default. While *Team match mode* is on, the single-player points and the standings board pause.
+
 ## 1.9.3
 
 - **Better:** the Look tab is split into separate tabs: **Tower** (window, rows, small tower, corner), **Boards** (results board and skill luck board, one box each) and **Look** (pictures, colours, text, font). The tab bar is tighter so all eight tabs fit.

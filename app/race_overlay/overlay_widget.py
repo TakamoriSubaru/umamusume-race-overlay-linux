@@ -37,12 +37,14 @@ from .databases import UmasDB, OutfitsDB, PlayersDB
 from .frameless import FramelessMixin, fit_window
 from .images import ImageStore, find_file_ci, find_wine_thumb_dirs
 from .results_board import ResultsBoard
-from .scoring import ScoreBook, points_for
+from .scoring import ScoreBook, norm_name, points_for
 from .settings_dialog import SettingsDialog
 from .simdata import parse_sim
 from .sources import TestReplayThread, WatchThread, choose_source
 from .luck import luck_table, pick, skill_ids
 from .luck_board import LuckBoard
+from .match import Match
+from .match_board import MatchBoard
 from .standings_board import StandingsBoard
 from .tray import make_tray_icon
 from .updater import restart_program
@@ -167,6 +169,8 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.book = ScoreBook()                 # points of every race (scores.json)
         self.standings = StandingsBoard(self)
         self.luck = LuckBoard(self)
+        self.match = Match()                    # team match (draft): teams, players, races (match.json)
+        self.mboard = MatchBoard(self)
         self.skill_acts = {}                    # {horse index: [skill ids that activated]}
 
         self.timer = QTimer(self)
@@ -274,6 +278,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.board.dismiss()                 # the results of the last race go away
         self.standings.dismiss()
         self.luck.dismiss()
+        self.mboard.dismiss()
         self.skill_acts = sim.get("skills") or {}
         self.horses = self.build_horses(payload, rmap)
 
@@ -421,6 +426,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.board.tick(now, dt)
         self.standings.tick(now, dt)
         self.luck.tick(now, dt)
+        self.mboard.tick(now, dt)
         self.update()
 
     # ----- tower maths (port of renderTime) ------------------------------------
@@ -881,6 +887,8 @@ class OverlayWidget(FramelessMixin, QWidget):
         m.addAction("Show / hide the standings now", self.show_standings_now)
         self.act_luck = m.addAction("Show skill luck board (to place it)",
                                     lambda: self.set_luck_pinned(not self.luck.pinned))
+        self.act_match = m.addAction("Show match board (to place it)",
+                                     lambda: self.set_match_pinned(not self.mboard.pinned))
         m.addAction("Replay a saved race (test)...", self.test_replay)
         self.act_compact = m.addAction("Small corner tower (top 5 only)")
         self.act_compact.setCheckable(True)
@@ -918,6 +926,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.act_board.setText("Hide results board" if self.board.pinned else "Show results board (to place it)")
         self.act_stand.setText("Hide standings board" if self.standings.pinned else "Show standings board (to place it)")
         self.act_luck.setText("Hide skill luck board" if self.luck.pinned else "Show skill luck board (to place it)")
+        self.act_match.setText("Hide match board" if self.mboard.pinned else "Show match board (to place it)")
         self.act_prev.setChecked(self.preview)
         self.act_compact.setChecked(self.compact())
         for mode, act in self.pic_actions.items():
@@ -955,6 +964,8 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.standings.remember()
         if self.luck.isVisible() or self.luck.entries:
             self.luck.remember()
+        if self.mboard.isVisible() or self.mboard.entries:
+            self.mboard.remember()
         save_config(self.cfg)
         try:
             self.source.stop()
@@ -977,6 +988,8 @@ class OverlayWidget(FramelessMixin, QWidget):
             self.standings.remember()
         if self.luck.isVisible() or self.luck.entries:
             self.luck.remember()
+        if self.mboard.isVisible() or self.mboard.entries:
+            self.mboard.remember()
         save_config(self.cfg)
         try:
             self.source.stop()
@@ -991,6 +1004,7 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.board.close()
         self.standings.close()
         self.luck.close()
+        self.mboard.close()
         if self.s.get("stop_server", True):
             stop_started_server()
         self.close()
@@ -1258,7 +1272,10 @@ class OverlayWidget(FramelessMixin, QWidget):
         line1, _line2 = self.course_lines(self.course_info)
         testing = self.test_thread is not None and self.test_thread.isRunning()
         counts = (not self.preview) and (not testing) and bool(getattr(self.source, "counts", True))
-        scoring = bool(self.s.get("scoring", True)) and counts
+        match_on = bool(self.s.get("match_mode", False)) and counts
+        scoring = bool(self.s.get("scoring", True)) and counts and not match_on
+        if match_on:
+            self.score_match(entries, line1)
         if scoring:
             named = [e for e in entries if e["h"].trainer.strip()]
             for e in named:
@@ -1280,7 +1297,12 @@ class OverlayWidget(FramelessMixin, QWidget):
                 luck_len = self.luck.stay() + SLIDE_SECONDS + 0.2
                 if self.luck.hold_forever():
                     luck_len = 0.0
-        if self.s.get("standings_board", True) and counts and not self.args.hold:
+        if match_on and self.s.get("match_board", True) and not self.args.hold:
+            stay = float(self.s.get("results_seconds", 10.0)) if shown else 0.0
+            if stay > 0 or not shown:
+                self.mboard.present([{"match": self.match}], self.mboard.footer_text(),
+                                    delay + stay + SLIDE_SECONDS + 0.2 + luck_len if shown else delay + luck_len)
+        if self.s.get("standings_board", True) and counts and not self.args.hold and not match_on:
             every = int(self.s.get("standings_every", 1) or 0)        # 0 = only when you show it yourself
             done = int(self.cfg.get("races_since_standings", 0)) + 1
             due = every > 0 and done >= every
@@ -1291,6 +1313,28 @@ class OverlayWidget(FramelessMixin, QWidget):
                 stay = 0.0
             if due and (stay > 0 or not shown):
                 self.standings.present(delay=delay + stay + SLIDE_SECONDS + 0.2 + luck_len)
+
+    def score_match(self, entries, title):
+        """Give the race to the teams: the best placed team players score (4, 2, 1 ...). Players that are on
+        no team (NPCs, other players) are skipped, so the next team player takes the placement."""
+        named = [{"name": e["h"].trainer, "uma": e["h"].label, "place": e["place"], "time": e["time"]}
+                 for e in entries if e["h"].trainer.strip()]
+        race = self.match.add_race(named, title=title)
+        scored = {}
+        if race:
+            scored = {norm_name(r["name"]): r for r in race["results"]}
+        for e in entries:
+            k = norm_name(e["h"].trainer)
+            team = self.match.team_of(e["h"].trainer)
+            if team is None:
+                continue
+            e["team_color"] = self.match.teams[team]["color"]
+            r = scored.get(k)
+            e["pts"] = "+%d" % r["points"] if r and r["points"] else "0"
+        for e in entries:
+            if "pts" not in e:
+                e["pts"] = "-"                   # not on a team: no points
+        self.mboard.refresh()
 
     def luck_entries(self):
         """(entries, footer) for the skill luck board of the race that just ran; ([], "") without skill data."""
@@ -1322,6 +1366,18 @@ class OverlayWidget(FramelessMixin, QWidget):
         out = [dict(r, side="lucky", place=i) for i, r in enumerate(lucky, 1)]
         out += [dict(r, side="unlucky", place=i) for i, r in enumerate(unlucky, 1)]
         return out, "Skills that activated, out of the skills equipped"
+
+    def sample_match(self):
+        return [{"match": Match.sample()}], "First to 25 points"
+
+    def set_match_pinned(self, on):
+        """Show the match board so it can be placed: the real match when there is one, else a made-up one."""
+        if on:
+            real = bool(self.match.race_rows()) or any(t["players"] for t in self.match.teams)
+            entries, footer = ([{"match": self.match}], "") if real else self.sample_match()
+            self.mboard.set_data(entries, footer)
+        self.mboard.set_pinned(on)
+        self.refresh_tray()
 
     def set_luck_pinned(self, on):
         self.luck.set_pinned(on, self.sample_luck() if on and not self.luck.entries else None)

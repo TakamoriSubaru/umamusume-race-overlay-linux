@@ -55,6 +55,7 @@
 - 🌙 **Dark settings window** with a pink, yellow and mint theme (new in 1.1.0)
 - 📂 **Saved races folder:** pick the folder in Settings; the folders inside it (Career, Room match, ...) are searched too (new in 1.1.0)
 - 🏁 **Results board:** after the race a second window shows the final places in two columns, like a TV results graphic, with finish times, the gap to the winner and the track name (new in 1.4.0)
+- 🤝 **Team match (draft):** two teams, 4 / 2 / 1 points per race, first to 25, own board for OBS (new in 1.9.4)
 - 🍀 **Skill luck board:** the luckiest and unluckiest players of a race, by how many of their skills activated (new in 1.9.2)
 - 🏆 **Points and standings board:** every race gives points (1st = number of players, last = 1), added up and shown page by page while the next race is set up. It can also read your own Google Sheet (new in 1.6.0)
 - ▲▼ **Position arrows:** a small green / red arrow when a uma gains or loses a place (new in 1.4.0)
@@ -395,6 +396,18 @@ Use *Show standings board (to place it)* in the Menu to put the window where you
 After the results board, an optional **skill luck board** shows the **luckiest** and the **unluckiest** players of the race: how many of the skills a player brought actually activated (for example 13/16), who missed the most, and who hit every skill. In OBS it is its own window: **Umamusume Skill Luck (Linux)**.
 
 Turn it on in the Boards tab (*Skill luck board*), choose how many players are listed on each side, how long it stays, and give it your own title. *Show skill luck board (to place it)* in the Home tab or tray menu shows sample data so you can place it first. It needs the list of equipped skills, which **saved race files** contain. Without it the board counts only the skills that activated. The numbers come from the race data the game already wrote, nothing is read from the game.
+
+## 🤝 Team match (draft)
+
+For team events (3v3, 5v5, 6v6, 7v7 ...) the **Draft tab** keeps the score of the match for you. Two teams, a few players each:
+
+- **First team to reach 25 wins** (changeable). After each race the best placed **team players** score for their team: **1st 4 points, 2nd 2, 3rd 1** (changeable, for example `5,3,1`).
+- Players that are on **no team** (NPCs, other players) never score. The next team player simply takes the placement, as in the usual rules.
+- Type the **trainer names** of each team (one per line, capital letters do not matter) or use *Add a player seen in a race...*. Optionally list the **drafted umas** of each team.
+- The **match board** (its own window: **Umamusume Match (Linux)**) comes in after the results board and stays until the next race: both scores with a progress bar, the points of every race, the drafted umas, and *TEAM X WINS!* when a team reaches the target. Use *Show match board (to place it)* in the Home tab to position it first.
+- On the results board the rows are tinted in the team colour and the **PTS** column shows the team points of the race.
+- A ruling (a remake, a penalty, a disconnect): **Add or take points...**. A wrong race: **Undo last race**. **New match** forgets the races and keeps the teams.
+- While *Team match mode* is on, the single-player points and the standings board pause. Replays, previews and old race files never score, and the same race is never counted twice.
 
 ## 🗺️ Roadmap
 
