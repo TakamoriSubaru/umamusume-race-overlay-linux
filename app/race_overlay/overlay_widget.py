@@ -1277,7 +1277,7 @@ class OverlayWidget(FramelessMixin, QWidget):
             luck_entries, luck_footer = self.luck_entries()
             if luck_entries:
                 self.luck.present(luck_entries, luck_footer, luck_at)
-                luck_len = float(self.s.get("results_seconds", 10.0)) + SLIDE_SECONDS + 0.2
+                luck_len = self.luck.stay() + SLIDE_SECONDS + 0.2
                 if self.luck.hold_forever():
                     luck_len = 0.0
         if self.s.get("standings_board", True) and counts and not self.args.hold:

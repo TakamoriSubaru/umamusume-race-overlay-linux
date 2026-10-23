@@ -119,6 +119,10 @@ DEFAULT_SETTINGS = {
     "standings_avatars": True,        # a picture for every player (from the People tab (Players), else a letter)
     "standings_every": 1,             # show the standings after every N races (0 = only when I show them)
     "luck_board": False,              # show the skill luck board (luckiest / unluckiest) after the results board
+    "results_title": "",              # own title for the results board ("" = RACE RESULTS)
+    "results_details": "both",        # results board: "both" (time + gap), "time", "none"
+    "luck_title": "",                 # own title for the luck board ("" = SKILL LUCK)
+    "luck_seconds": 10.0,             # how long the luck board stays (0 = until the next race)
     "luck_rows": 3,                   # players shown on each side of the luck board
     "quick_start_open": True,         # Home tab: quick start box open
     "standings_hide_zero": True,        # sheet: players with 0 points are not shown
@@ -137,7 +141,8 @@ KEEP_ON_RESET = ("source", "saved_races_dir", "watch_subfolders", "start_delay",
                  "standings_name_col", "standings_score_col", "standings_uma_col", "standings_first_row",
                  "standings_view", "standings_round_blocks", "standings_total_cols", "standings_border_values",
                  "standings_top_n", "standings_hide_zero", "standings_layout", "standings_avatars", "standings_every",
-                 "standings_title", "standings_rows", "standings_page_seconds", "standings_refresh", "quick_start_open", "luck_board")
+                 "standings_title", "standings_rows", "standings_page_seconds", "standings_refresh", "quick_start_open", "luck_board",
+                 "luck_seconds")
 
 
 # Colour sets for the Look tab. Each one only changes colours.

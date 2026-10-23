@@ -204,7 +204,7 @@ Good to know:
 When the race ends the tower slides out and the results board slides in. It shows every uma in finishing order, with the finish time and the gap to the winner, and the track name at the bottom. Up to 6 umas are shown in one column, more are split into two columns. The window sizes itself to the number of umas; pull its edges to make it bigger or smaller and the size is remembered.
 
 - It is a separate window called **Umamusume Race Results (Linux)**, so you can place it anywhere on the stream, independent of the tower.
-- **Look tab:** turn it on or off, and choose how long it stays (or *Until the next race*). `--hold` keeps it until the next race too.
+- **Boards tab:** turn it on or off, choose how long it stays (or *Until the next race*), give it your own **title** (for example *GRAND FINAL*), and choose what each row shows: finish time and gap, time only, or names only. `--hold` keeps it until the next race too.
 - It uses the same colours, font, picture choice (uma / player / both) and slide direction as the tower. The *Accent colour* is the title line and the track name.
 - **Home tab / tray menu:** *Show results board (to place it)* shows it with sample places, so you can position and style it before any race has been run.
 - Equal finish times share one place. A uma without a finish time shows `--`.
@@ -361,8 +361,8 @@ It only shows information. It is not a command line, and it does not change anyt
 | Faces are letters, not pictures | The `character_thumbs` folder was not found. Copy it into `images/uma/`. |
 | The tower appears before the gates open (saved races) | Raise **Start delay** in the Race data tab. It is an estimate: live mode is exact. |
 | The tower appears too late (saved races) | Lower **Start delay**, or nudge with the arrow keys. |
-| I cannot see the overlay window | That is normal before a race: it is hidden until the race starts. Use **Show overlay window (to place it)** in the Menu, or untick **Hide the window until a race starts** in the Look tab. |
-| The results board does not show after a race | Check *Show the results board after each race* in the Look tab. It appears when the tower slides out, so a race that is closed early (no finish) shows none. In OBS it is a second source: **Umamusume Race Results (Linux)**. |
+| I cannot see the overlay window | That is normal before a race: it is hidden until the race starts. Use **Show overlay window (to place it)** in the Menu, or untick **Hide the window until a race starts** in the Tower tab. |
+| The results board does not show after a race | Check *Show the results board after each race* in the Boards tab. It appears when the tower slides out, so a race that is closed early (no finish) shows none. In OBS it is a second source: **Umamusume Race Results (Linux)**. |
 | The results board is not where I want it | Press **Show results board (to place it)** in the Menu, drag it, then press the button again. The place is remembered. |
 | A uma shows *(Alt)* | It is an alternative outfit without a name. Name it in the **Outfits** tab. |
 
@@ -394,7 +394,7 @@ Use *Show standings board (to place it)* in the Menu to put the window where you
 
 After the results board, an optional **skill luck board** shows the **luckiest** and the **unluckiest** players of the race: how many of the skills a player brought actually activated (for example 13/16), who missed the most, and who hit every skill. In OBS it is its own window: **Umamusume Skill Luck (Linux)**.
 
-Turn it on in the Look tab (*More options*, *Skill luck board*) and choose how many players are listed on each side. *Show skill luck board (to place it)* in the Home tab or tray menu shows sample data so you can place it first. It needs the list of equipped skills, which **saved race files** contain. Without it the board counts only the skills that activated. The numbers come from the race data the game already wrote, nothing is read from the game.
+Turn it on in the Boards tab (*Skill luck board*), choose how many players are listed on each side, how long it stays, and give it your own title. *Show skill luck board (to place it)* in the Home tab or tray menu shows sample data so you can place it first. It needs the list of equipped skills, which **saved race files** contain. Without it the board counts only the skills that activated. The numbers come from the race data the game already wrote, nothing is read from the game.
 
 ## 🗺️ Roadmap
 

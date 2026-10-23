@@ -107,7 +107,7 @@ class SettingsDialog(QDialog):
         icon_path = os.path.join(SCRIPT_DIR, "icon.png")
         if os.path.isfile(icon_path):
             self.setWindowIcon(QIcon(icon_path))
-        self.resize(680, 780)
+        self.resize(720, 780)
         self.setStyleSheet(build_theme_qss())
         lay = QVBoxLayout(self)
         lay.setContentsMargins(16, 16, 16, 14)
@@ -328,26 +328,39 @@ class SettingsDialog(QDialog):
         self.refresh_count()
 
         # ---- Look tab
-        look = QWidget()
+        look = QWidget()                  # Look: pictures, colours, text
         lv = QVBoxLayout(look)
-        f = QFormLayout()                 # the few settings most people use
+        f = QFormLayout()
         lv.addLayout(f)
-        adv = Collapsible("More options: colours, window, results board")
-        f2 = adv.form()                   # everything else is folded away
-        lv.addWidget(adv)
+        fc = QFormLayout()                # colours and font
+        lv.addLayout(fc)
         lv.addStretch(1)
+        tower = QWidget()                 # Tower: the race window itself
+        tv = QVBoxLayout(tower)
+        ft = QFormLayout()
+        tv.addLayout(ft)
+        tv.addStretch(1)
+        boards = QWidget()                # Boards: results board and skill luck board
+        bv = QVBoxLayout(boards)
+        gres = QGroupBox("Results board")
+        fr = QFormLayout(gres)
+        bv.addWidget(gres)
+        gluck = QGroupBox("Skill luck board")
+        fl = QFormLayout(gluck)
+        bv.addWidget(gluck)
+        bv.addStretch(1)
         s = ov.s
 
         self.cb_top = QCheckBox("Keep the overlay above all other windows")
         self.cb_top.setChecked(bool(s.get("on_top", True)))
         self.cb_top.toggled.connect(lambda on: ov.set_setting("on_top", on))
-        f2.addRow("Always on top", self.cb_top)
+        ft.addRow("Always on top", self.cb_top)
 
         self.cb_hide = QCheckBox("Hide the window until a race starts")
         self.cb_hide.setChecked(bool(s.get("auto_hide", True)))
         self.cb_hide.toggled.connect(lambda on: ov.set_setting("auto_hide", on))
         self.cb_hide.setToolTip("The window is hidden when no race runs and shows (without taking focus from the game)\nwhen a race starts. Use 'Show overlay window' in the Home tab to place it.")
-        f2.addRow("Before the race", self.cb_hide)
+        ft.addRow("Before the race", self.cb_hide)
 
         self.cmb_slide = QComboBox()
         for _v, text in SLIDE_CHOICES:
@@ -355,13 +368,13 @@ class SettingsDialog(QDialog):
         self.cmb_slide.setCurrentIndex(next((i for i, (v, _t) in enumerate(SLIDE_CHOICES)
                                              if v == s.get("slide", "auto")), 0))
         self.cmb_slide.activated.connect(lambda i: ov.set_setting("slide", SLIDE_CHOICES[i][0]))
-        f2.addRow("Slides in from", self.cmb_slide)
+        ft.addRow("Slides in from", self.cmb_slide)
 
         self.cb_title = QCheckBox("Show the window title bar")
         self.cb_title.setChecked(bool(s.get("title_bar", False)))
         self.cb_title.toggled.connect(lambda on: ov.set_setting("title_bar", on))
         self.cb_title.setToolTip("Off = clean window: drag to move it, pull the edges to resize it.")
-        f2.addRow("Title bar", self.cb_title)
+        ft.addRow("Title bar", self.cb_title)
 
         self.cmb_avatar = QComboBox()
         self._pic_modes = [m for m, _ in ov.PICTURE_CHOICES]
@@ -380,25 +393,25 @@ class SettingsDialog(QDialog):
 
         self.btn_bg = QPushButton()
         self.btn_bg.clicked.connect(lambda: self.pick("bg", self.btn_bg))
-        f2.addRow("Background colour", self.btn_bg)
+        fc.addRow("Background colour", self.btn_bg)
 
         self.sl_op = QSlider(Qt.Orientation.Horizontal)
         self.sl_op.setRange(0, 100)
         self.sl_op.setValue(int(float(s.get("bg_opacity", 1.0)) * 100))
         self.sl_op.valueChanged.connect(lambda v: ov.set_setting("bg_opacity", v / 100.0))
-        f2.addRow("Background opacity\n(--transparent / --chroma)", self.sl_op)
+        fc.addRow("Background opacity\n(--transparent / --chroma)", self.sl_op)
 
         self.btn_tc = QPushButton()
         self.btn_tc.clicked.connect(lambda: self.pick("text_color", self.btn_tc))
-        f2.addRow("Text colour", self.btn_tc)
+        fc.addRow("Text colour", self.btn_tc)
 
         self.btn_sc = QPushButton()
         self.btn_sc.clicked.connect(lambda: self.pick("sub_color", self.btn_sc))
-        f2.addRow("Small text colour", self.btn_sc)
+        fc.addRow("Small text colour", self.btn_sc)
 
         self.btn_ac = QPushButton()
         self.btn_ac.clicked.connect(lambda: self.pick("accent", self.btn_ac))
-        f2.addRow("Accent colour\n(results board)", self.btn_ac)
+        fc.addRow("Accent colour\n(results board)", self.btn_ac)
 
         row = QHBoxLayout()
         self.sl_size = QSlider(Qt.Orientation.Horizontal)
@@ -421,12 +434,12 @@ class SettingsDialog(QDialog):
         self.font_box.currentFontChanged.connect(self.on_font)
         row2.addWidget(self.cb_deffont)
         row2.addWidget(self.font_box, 1)
-        f2.addRow("Font", row2)
+        fc.addRow("Font", row2)
 
         self.cb_arrows = QCheckBox("Show an arrow when a uma gains or loses a place")
         self.cb_arrows.setChecked(bool(s.get("rank_arrows", True)))
         self.cb_arrows.toggled.connect(lambda on: ov.set_setting("rank_arrows", on))
-        f2.addRow("Position arrows", self.cb_arrows)
+        ft.addRow("Position arrows", self.cb_arrows)
 
         self.sp_rows = QSpinBox()
         self.sp_rows.setRange(0, 18)
@@ -435,7 +448,7 @@ class SettingsDialog(QDialog):
         self.sp_rows.setValue(int(s.get("max_rows", 0) or 0))
         self.sp_rows.valueChanged.connect(lambda v: ov.set_setting("max_rows", int(v)))
         self.sp_rows.setToolTip("Show only the first places in the tower. The window height follows the number of rows.")
-        f2.addRow("Rows in the tower", self.sp_rows)
+        ft.addRow("Rows in the tower", self.sp_rows)
 
         self.cmb_style = QComboBox()
         self.cmb_style.addItem("Full tower", "full")
@@ -448,7 +461,7 @@ class SettingsDialog(QDialog):
             self.sp_crow.setEnabled(self.cmb_style.currentData() == "compact")))
         self.cmb_style.setToolTip("The small tower shows only the first umas, with name and gap. When the race ends, "
                                   "the results board comes in as usual.")
-        f.addRow("Tower style", self.cmb_style)
+        ft.addRow("Tower style", self.cmb_style)
 
         self.sp_crow = QSpinBox()
         self.sp_crow.setRange(2, 10)
@@ -456,7 +469,7 @@ class SettingsDialog(QDialog):
         self.sp_crow.setValue(int(s.get("compact_rows", 5) or 5))
         self.sp_crow.valueChanged.connect(lambda v: ov.set_setting("compact_rows", int(v)))
         self.sp_crow.setEnabled(s.get("tower_style") == "compact")
-        f.addRow("Small tower shows", self.sp_crow)
+        ft.addRow("Small tower shows", self.sp_crow)
 
         self.cmb_corner = QComboBox()
         self.cmb_corner.addItem("Choose a corner...", "")
@@ -468,14 +481,14 @@ class SettingsDialog(QDialog):
         self.cmb_corner.currentIndexChanged.connect(
             lambda _i: self.cmb_corner.currentData() and ov.snap_to_corner(self.cmb_corner.currentData()))
         self.cmb_corner.setToolTip("Moves the overlay window to that corner of the screen. You can still drag it.")
-        f2.addRow("Move window to", self.cmb_corner)
+        ft.addRow("Move window to", self.cmb_corner)
 
-        self.cb_board = QCheckBox("Show the results board after each race")
+        self.cb_board = QCheckBox("After each race")
         self.cb_board.setChecked(bool(s.get("results_board", True)))
         self.cb_board.toggled.connect(lambda on: ov.set_setting("results_board", on))
         self.cb_board.setToolTip("A second window ('Umamusume Race Results (Linux)') with the final places.\n"
                                  "Add it as its own window source in OBS. Use 'Show results board' in the Home tab to place it.")
-        f2.addRow("Results board", self.cb_board)
+        fr.addRow("Show", self.cb_board)
 
         self.sp_board = QDoubleSpinBox()
         self.sp_board.setRange(0.0, 120.0)
@@ -485,19 +498,19 @@ class SettingsDialog(QDialog):
         self.sp_board.setSuffix(" seconds")
         self.sp_board.setValue(float(s.get("results_seconds", 10.0)))
         self.sp_board.valueChanged.connect(lambda v: ov.set_setting("results_seconds", float(v)))
-        f2.addRow("Results board stays", self.sp_board)
-        self.cb_luck = QCheckBox("Show the skill luck board after the results (luckiest / unluckiest)")
+        fr.addRow("Stays", self.sp_board)
+        self.cb_luck = QCheckBox("After the results (luckiest / unluckiest)")
         self.cb_luck.setChecked(bool(s.get("luck_board", False)))
         self.cb_luck.setToolTip("Needs the race data to list each player's skills: saved races do. "
                                 "In OBS it is its own window: Umamusume Skill Luck (Linux).")
         self.cb_luck.toggled.connect(lambda on: ov.set_setting("luck_board", on))
-        f2.addRow("Skill luck board", self.cb_luck)
+        fl.addRow("Show", self.cb_luck)
         self.sp_luck = QSpinBox()
         self.sp_luck.setRange(1, 5)
         self.sp_luck.setSuffix(" players")
         self.sp_luck.setValue(int(s.get("luck_rows", 3)))
         self.sp_luck.valueChanged.connect(lambda v: ov.set_setting("luck_rows", int(v)))
-        f2.addRow("Luck board shows", self.sp_luck)
+        fl.addRow("Players per side", self.sp_luck)
 
         self.cb_prev = QCheckBox("Show a preview race (to see your changes)")
         self.cb_prev.toggled.connect(ov.set_preview)
@@ -505,7 +518,37 @@ class SettingsDialog(QDialog):
 
         btn_reset = QPushButton("Reset look to defaults")
         btn_reset.clicked.connect(self.reset)
-        f2.addRow("", btn_reset)
+        fc.addRow("", btn_reset)
+
+        # new options for the boards
+        ed_rt = QLineEdit(s.get("results_title", ""))
+        ed_rt.setPlaceholderText("RACE RESULTS")
+        ed_rt.editingFinished.connect(lambda: (ov.set_setting("results_title", ed_rt.text().strip()), ov.board.update()))
+        fr.addRow("Title", ed_rt)
+        cmb_det = QComboBox()
+        for key, text in (("both", "Finish time and gap"), ("time", "Finish time only"), ("none", "Names only")):
+            cmb_det.addItem(text, key)
+        cmb_det.setCurrentIndex(max(0, cmb_det.findData(s.get("results_details", "both"))))
+        cmb_det.currentIndexChanged.connect(lambda _i: (ov.set_setting("results_details", cmb_det.currentData()), ov.board.update()))
+        fr.addRow("Each row shows", cmb_det)
+        ed_lt = QLineEdit(s.get("luck_title", ""))
+        ed_lt.setPlaceholderText("SKILL LUCK")
+        ed_lt.editingFinished.connect(lambda: (ov.set_setting("luck_title", ed_lt.text().strip()), ov.luck.update()))
+        fl.addRow("Title", ed_lt)
+        sp_ls = QDoubleSpinBox()
+        sp_ls.setRange(0.0, 120.0)
+        sp_ls.setDecimals(0)
+        sp_ls.setSpecialValueText("Until the next race")
+        sp_ls.setSuffix(" seconds")
+        sp_ls.setValue(float(s.get("luck_seconds", 10.0)))
+        sp_ls.valueChanged.connect(lambda v: ov.set_setting("luck_seconds", float(v)))
+        fl.addRow("Stays", sp_ls)
+        bnote = QLabel("<i>The standings board has its own settings in the Points tab. Each board is its own window "
+                       "in OBS. Drag a board to move it, pull its edges to resize it.</i>")
+        bnote.setWordWrap(True)
+        bv.insertWidget(0, bnote)
+        tabs.addTab(self.scrolled(tower), "Tower")
+        tabs.addTab(self.scrolled(boards), "Boards")
         tabs.addTab(self.scrolled(look), "Look")
 
         # ---- People tab (Players, Umas, Outfits as inner tabs)

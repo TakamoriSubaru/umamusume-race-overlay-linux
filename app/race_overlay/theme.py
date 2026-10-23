@@ -55,7 +55,7 @@ QScrollArea { background: transparent; border: none; }
 QScrollArea > QWidget > QWidget { background: transparent; }
 QTabWidget::pane { border: 1px solid %(line)s; border-radius: 14px; background: #1c1826; top: -2px; }
 QTabBar { background: transparent; }
-QTabBar::tab { background: %(card2)s; color: #c9c0e6; padding: 9px 22px; margin: 0 6px 8px 0;
+QTabBar::tab { background: %(card2)s; color: #c9c0e6; padding: 9px 13px; margin: 0 4px 8px 0;
                border-radius: 17px; font-weight: 700; }
 QTabBar::tab:hover:!selected { background: #3a3258; color: #ffffff; }
 QTabBar::tab:selected { background: %(grad)s; color: #2a1020; }

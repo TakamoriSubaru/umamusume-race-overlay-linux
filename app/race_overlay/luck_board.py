@@ -14,6 +14,8 @@ GOOD, BAD = "#4cd9a0", "#ff6b81"
 class LuckBoard(ResultsBoard):
     NAME = LUCK_NAME
     TITLE = "SKILL LUCK"
+    TITLE_KEY = "luck_title"
+    STAY_KEY = "luck_seconds"
     POS_KEY, SCALE_KEY = "luck_pos", "luck_scale"
 
     def set_data(self, entries, footer):

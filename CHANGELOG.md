@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.3
+
+- **Better:** the Look tab is split into separate tabs: **Tower** (window, rows, small tower, corner), **Boards** (results board and skill luck board, one box each) and **Look** (pictures, colours, text, font). The tab bar is tighter so all eight tabs fit.
+- **New:** **own title** for the results board and for the skill luck board (for example *GRAND FINAL*).
+- **New:** **what each results row shows**: finish time and gap, finish time only, or names only.
+- **New:** the skill luck board has its own **stay time** (or until the next race).
+- **Note:** nothing was removed, and old settings keep working.
+
 ## 1.9.2
 
 - **New:** **skill luck board**. After the results board it shows the **luckiest** and the **unluckiest** players: how many of the skills they brought activated (for example 13/16), who missed the most, and who hit every skill. Its own window for OBS: *Umamusume Skill Luck (Linux)*. Turn it on in the Look tab (*More options*) and choose how many players are shown on each side. *Show skill luck board (to place it)* is in the Home tab and the tray menu.

@@ -29,6 +29,8 @@ PTS_W = 56          # extra width of the points column (only when the race is sc
 class ResultsBoard(FramelessMixin, QWidget):
     NAME = RESULTS_NAME         # <- the window name you pick in OBS
     TITLE = "RACE RESULTS"
+    TITLE_KEY = "results_title"      # setting with your own title
+    STAY_KEY = "results_seconds"     # setting: how long the board stays
     POS_KEY, SCALE_KEY = "results_pos", "results_scale"
 
     def __init__(self, ov):
@@ -112,8 +114,14 @@ class ResultsBoard(FramelessMixin, QWidget):
             fit_window(self, self.lw, self.lh, self.pref_scale)
 
     # ----- showing and hiding -----------------------------------------------------------
+    def stay(self):
+        return float(self.ov.s.get(self.STAY_KEY, 10.0))
+
+    def title_now(self):
+        return (self.ov.s.get(self.TITLE_KEY, "") or "").strip().upper() or self.TITLE
+
     def hold_forever(self):
-        return bool(self.ov.args.hold) or float(self.ov.s.get("results_seconds", 10.0)) <= 0
+        return bool(self.ov.args.hold) or self.stay() <= 0
 
     def present(self, entries, footer, delay):
         """Show the board `delay` seconds from now (and for results_seconds after that)."""
@@ -151,7 +159,7 @@ class ResultsBoard(FramelessMixin, QWidget):
             self.pending_at = None
             self.want = 1.0
             self._reveal()
-            self.deadline = None if self.hold_forever() else now + float(self.ov.s.get("results_seconds", 10.0))
+            self.deadline = None if self.hold_forever() else now + self.stay()
         if self.deadline is not None and now >= self.deadline and not self.pinned:
             self.deadline = None
             self.want = 0.0
@@ -223,7 +231,7 @@ class ResultsBoard(FramelessMixin, QWidget):
             p.drawPixmap(QRectF(PAD, 8, 38, 38), self.icon, QRectF(self.icon.rect()))
         p.setFont(self.spaced(24, True, 2.5))
         p.setPen(tc)
-        p.drawText(QRectF(0, 0, lw, TOP_H - 3), Qt.AlignmentFlag.AlignCenter, getattr(self, "TITLE_TEXT", None) or self.TITLE)
+        p.drawText(QRectF(0, 0, lw, TOP_H - 3), Qt.AlignmentFlag.AlignCenter, getattr(self, "TITLE_TEXT", None) or self.title_now())
 
     def has_pts(self):
         return any("pts" in e for e in self.entries)
@@ -309,14 +317,17 @@ class ResultsBoard(FramelessMixin, QWidget):
             p.setPen(ac if place == 1 else tc)
             p.drawText(QRectF(x + self.col_w - pw - 6, y, pw, rh),
                        Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, str(ent["pts"]))
-        p.setFont(ov.fnt(14, True, mono=True))
-        p.setPen(tc)
-        p.drawText(QRectF(tx, y + 5, time_w, 18), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                   ent["time"])
-        p.setFont(ov.fnt(10, place == 1))
-        p.setPen(ac if place == 1 else sc)
-        p.drawText(QRectF(tx, y + 23, time_w, 14), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                   ent["gap"])
+        details = ov.s.get("results_details", "both")
+        if details != "none":
+            p.setFont(ov.fnt(14, True, mono=True))
+            p.setPen(tc)
+            p.drawText(QRectF(tx, y + 5, time_w, 18), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                       ent["time"])
+        if details == "both":
+            p.setFont(ov.fnt(10, place == 1))
+            p.setPen(ac if place == 1 else sc)
+            p.drawText(QRectF(tx, y + 23, time_w, 14), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                       ent["gap"])
 
     def draw_footer(self, p, lw, lh, ac):
         p.fillRect(QRectF(0, lh - FOOT_H, lw, FOOT_H), self.band())
