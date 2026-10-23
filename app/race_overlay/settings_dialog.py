@@ -39,6 +39,7 @@ from . import logbuf
 from .databases import BUILTIN_OUTFITS
 from .diagnostics import LOG_FILES, read_tail, run_checks
 from .sources import choose_source, count_race_files
+from .setups import SETUPS, current_setup
 from .theme import Banner, THEME, build_theme_qss
 from .updater import (
     Job,
@@ -127,6 +128,38 @@ class SettingsDialog(QDialog):
         self.lbl_state.setStyleSheet("font-size:15px;")
         mv.addWidget(self.lbl_state)
 
+        sbx = QGroupBox("Setup")
+        sbl = QVBoxLayout(sbx)
+        srow = QHBoxLayout()
+        self.cmb_setup = QComboBox()
+        for st in SETUPS:
+            self.cmb_setup.addItem(st["title"], st["key"])
+        self.cmb_setup.addItem("Custom (changed by hand)", "")
+        cur = current_setup(ov.s)
+        self.cmb_setup.setCurrentIndex(self.cmb_setup.findData(cur or ""))
+        self.cmb_setup.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.cmb_setup.setMinimumContentsLength(10)
+        self.btn_setup = QPushButton("Use this setup")
+        self.btn_setup.setObjectName("primary")
+        self.btn_setup.setMinimumWidth(10)
+        srow.addWidget(self.cmb_setup, 1)
+        srow.addWidget(self.btn_setup)
+        sbl.addLayout(srow)
+        self.lbl_setup = QLabel()
+        self.lbl_setup.setWordWrap(True)
+        sbl.addWidget(self.lbl_setup)
+
+        def on_setup_changed(_i=None):
+            key = self.cmb_setup.currentData()
+            st = next((x for x in SETUPS if x["key"] == key), None)
+            self.btn_setup.setEnabled(st is not None)
+            self.lbl_setup.setText(st["blurb"] if st else "You changed boards or options by hand. Pick a setup "
+                                   "to switch to a ready-made one.")
+        self.cmb_setup.currentIndexChanged.connect(on_setup_changed)
+        self.btn_setup.clicked.connect(lambda: ov.apply_setup(self.cmb_setup.currentData()))
+        on_setup_changed()
+        mv.addWidget(sbx)
+
         qs = Collapsible("Quick start (3 steps)", open_=bool(ov.s.get("quick_start_open", True)),
                          on_toggle=lambda on: ov.set_setting("quick_start_open", on))
         qtext = QLabel("<b>1.</b> Start Uma Musume. The overlay waits for it and shows a green dot when it is ready.<br>"
@@ -153,6 +186,7 @@ class SettingsDialog(QDialog):
         mv.addWidget(self.note_show)
 
         bx = QGroupBox("Boards")
+        bx.setStyleSheet("QGroupBox { margin-top: 4px; padding-top: 12px; } QGroupBox::title { height: 0; padding: 0; background: transparent; }")
         bxl = QVBoxLayout(bx)
         bxt = QLabel("Put each board where you want it on the stream, then press the button again to hide it.")
         bxt.setWordWrap(True)
@@ -174,7 +208,9 @@ class SettingsDialog(QDialog):
         self.btn_test = QPushButton("Replay a saved race (test, no game needed)...")
         self.btn_test.clicked.connect(lambda: ov.test_replay())
         bxl.addWidget(self.btn_test)
-        mv.addWidget(bx)
+        place = Collapsible("Place the boards on screen (before you stream)")
+        place.body_l.addWidget(bx)
+        mv.addWidget(place)
 
         more = Collapsible("More: start-up, picture folders, updates")
         mm = more.body_l
@@ -1486,6 +1522,12 @@ class SettingsDialog(QDialog):
         self.sp_crow.setValue(int(s["compact_rows"]))
         self.cmb_theme.setCurrentIndex(0)
         self.sync_widgets()
+
+    def show_tab(self, name):
+        for i in range(self._tabs.count()):
+            if self._tabs.tabText(i) == name:
+                self._tabs.setCurrentIndex(i)
+                return
 
     def poll(self):
         ov = self.ov

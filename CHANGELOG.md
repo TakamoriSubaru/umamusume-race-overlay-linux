@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.6
+
+- **New:** **welcome guide** the first time the program starts: pick what you want to show (*Just the tower*, *Tower and results*, *Points for every player*, *Team match (draft)* or *Everything at once*) and the tower size (full or small corner). It switches the right boards on and the others off, then lists the next steps (preview, show the window, OBS).
+- **New:** the same **Setup** choice at the top of the Home tab (*Use this setup*), so you can change it any time. It shows *Custom* when you changed boards by hand. A setup never touches your colours, fonts, window position or folders.
+- **Simpler:** *Place the boards on screen* is folded on the Home tab.
+- **Note:** nothing changes for existing installs; the guide only appears on a first start.
+
 ## 1.9.5
 
 - **New:** **When the boards come in** (Boards tab). The skill luck board, the match board and the standings board can each come in **one after the other** (as before) or **together with the results board**, so you can show all of them at once. Each one also has extra seconds of waiting time, and the results board has its own delay too. *Show all at once* and *One after the other* set all of them in one click.

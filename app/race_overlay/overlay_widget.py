@@ -37,6 +37,7 @@ from .databases import UmasDB, OutfitsDB, PlayersDB
 from .frameless import FramelessMixin, fit_window
 from .images import ImageStore, find_file_ci, find_wine_thumb_dirs
 from .results_board import ResultsBoard
+from .setups import get_setup
 from .scoring import ScoreBook, norm_name, points_for
 from .settings_dialog import SettingsDialog
 from .simdata import parse_sim
@@ -1127,6 +1128,41 @@ class OverlayWidget(FramelessMixin, QWidget):
         self.fit_to_rows()
         self.board.update()
         self.update()
+
+    def apply_setup(self, key, tower_style=None, rebuild=True):
+        """A ready-made setup (see setups.py): switches the right boards on and the others off."""
+        st = get_setup(key)
+        if st is None:
+            return
+        for k, v in st["settings"].items():
+            self.set_setting(k, v)
+        if tower_style in ("full", "compact"):
+            self.set_setting("tower_style", tower_style)
+        self.standings.refresh(True)
+        if rebuild:
+            QTimer.singleShot(0, lambda: self.rebuild_settings(st.get("tab") if st.get("tab") in ("Draft", "Points") else None))
+
+    def rebuild_settings(self, tab=None):
+        """Open the settings window again from scratch, so every checkbox shows the new values."""
+        old = getattr(self, "dialog", None)
+        was_open = old is not None and old.isVisible()
+        keep = old._tabs.currentIndex() if old is not None else 0
+        if old is not None:
+            old.close()
+            old.deleteLater()
+            self.dialog = None
+        self.open_settings()
+        if tab:
+            self.dialog.show_tab(tab)
+        elif was_open:
+            self.dialog._tabs.setCurrentIndex(keep)
+
+    def show_welcome(self):
+        from .welcome import WelcomeDialog
+        self.welcome = WelcomeDialog(self)
+        self.welcome.show()
+        self.welcome.raise_()
+        self.welcome.activateWindow()
 
     def open_settings(self):
         if getattr(self, "dialog", None) is None:

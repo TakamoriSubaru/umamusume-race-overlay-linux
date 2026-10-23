@@ -123,6 +123,10 @@ On start you get a **tray icon** and the **Menu** window. The overlay itself is 
 
 ---
 
+## 🧭 First start and setups
+
+The first time the program starts, a **welcome guide** asks what you want to show: *Just the tower*, *Tower and results*, *Points for every player*, *Team match (draft)* or *Everything at once*, and whether you want the full tower or the small corner tower. It switches the right boards on and the others off and lists what to do next. You can change the choice any time in the **Home tab, Setup**. Colours, fonts, window position and folders are never changed by a setup. If you changed boards by hand, the Home tab shows *Custom*.
+
 ## 🎥 Use it in OBS
 
 1. In the Menu, press **Show overlay window**.

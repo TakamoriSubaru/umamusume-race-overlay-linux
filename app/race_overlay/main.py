@@ -104,7 +104,9 @@ def main():
         w.s["show_overlay"] = True
     elif w.s.get("show_overlay") and not hidden_until_race:
         w.show()
-    if tray_ok and (first_run or w.s.get("open_menu", True)):
+    if tray_ok and first_run:
+        QTimer.singleShot(500, w.show_welcome)           # the welcome guide: what do you want to use?
+    elif tray_ok and w.s.get("open_menu", True):
         QTimer.singleShot(500, w.open_settings)
     if tray_ok and not w.isVisible():
         w.tray.showMessage(APP_NAME + " is running",
