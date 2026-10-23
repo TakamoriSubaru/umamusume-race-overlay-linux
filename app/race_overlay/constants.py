@@ -13,7 +13,7 @@ LUCK_NAME = "Umamusume Skill Luck (Linux)"        # window name of the skill luc
 RESULTS_NAME = "Umamusume Race Results (Linux)"   # window name of the results board (pick it in OBS)
 
 
-APP_VERSION = "1.9.4"
+APP_VERSION = "1.9.5"
 
 
 SLIDE_SECONDS = 0.45       # how long the tower takes to slide in / out
