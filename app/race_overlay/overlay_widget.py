@@ -1285,34 +1285,51 @@ class OverlayWidget(FramelessMixin, QWidget):
                                      "time": e["time"]} for e in named], title=line1)
         # the board comes in as the tower goes out, so the two are never both full-size at the same time
         delay = 1.0 if self.args.hold else max(0.5, float(self.args.hide_after))
+        delay += max(0.0, float(self.s.get("results_delay", 0.0) or 0.0))
         shown = bool(self.s.get("results_board", True))
         if shown:
             self.board.present(entries, line1, delay)
-        luck_at = delay + (float(self.s.get("results_seconds", 10.0)) + SLIDE_SECONDS + 0.2 if shown else 0.0)
-        luck_len = 0.0
-        if self.s.get("luck_board", False) and not self.args.hold and (not shown or not self.board.hold_forever()):
+        # When does each other board come in? "after": once the board before it has gone (one at a time).
+        # "with": together with the results board. Either way plus its own extra seconds.
+        cursor = delay + (float(self.s.get("results_seconds", 10.0)) + SLIDE_SECONDS + 0.2 if shown else 0.0)
+        blocked = shown and self.board.hold_forever()         # the results board never leaves: nothing can follow it
+
+        def slot(key):
+            """Seconds from now until the board comes in, or None when it cannot (it would wait for ever)."""
+            extra = max(0.0, float(self.s.get(key + "_delay", 0.0) or 0.0))
+            if self.s.get(key + "_when", "after") == "with":
+                return delay + extra
+            return None if blocked else cursor + extra
+
+        def follow(key, at, board):
+            """A board that came in 'after' holds the line for the next one until it has gone again."""
+            nonlocal cursor, blocked
+            if self.s.get(key + "_when", "after") == "with":
+                return
+            if board.hold_forever():
+                blocked = True
+            else:
+                cursor = at + board.stay() + SLIDE_SECONDS + 0.2
+
+        if self.s.get("luck_board", False) and not self.args.hold:
             luck_entries, luck_footer = self.luck_entries()
-            if luck_entries:
-                self.luck.present(luck_entries, luck_footer, luck_at)
-                luck_len = self.luck.stay() + SLIDE_SECONDS + 0.2
-                if self.luck.hold_forever():
-                    luck_len = 0.0
+            at = slot("luck")
+            if luck_entries and at is not None:
+                self.luck.present(luck_entries, luck_footer, at)
+                follow("luck", at, self.luck)
         if match_on and self.s.get("match_board", True) and not self.args.hold:
-            stay = float(self.s.get("results_seconds", 10.0)) if shown else 0.0
-            if stay > 0 or not shown:
-                self.mboard.present([{"match": self.match}], self.mboard.footer_text(),
-                                    delay + stay + SLIDE_SECONDS + 0.2 + luck_len if shown else delay + luck_len)
+            at = slot("match")
+            if at is not None:
+                self.mboard.present([{"match": self.match}], self.mboard.footer_text(), at)
         if self.s.get("standings_board", True) and counts and not self.args.hold and not match_on:
             every = int(self.s.get("standings_every", 1) or 0)        # 0 = only when you show it yourself
             done = int(self.cfg.get("races_since_standings", 0)) + 1
             due = every > 0 and done >= every
             self.cfg["races_since_standings"] = 0 if due else done
             save_config(self.cfg)
-            stay = float(self.s.get("results_seconds", 10.0))
-            if not shown:
-                stay = 0.0
-            if due and (stay > 0 or not shown):
-                self.standings.present(delay=delay + stay + SLIDE_SECONDS + 0.2 + luck_len)
+            at = slot("standings")
+            if due and at is not None:
+                self.standings.present(delay=at)
 
     def score_match(self, entries, title):
         """Give the race to the teams: the best placed team players score (4, 2, 1 ...). Players that are on

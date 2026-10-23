@@ -213,6 +213,8 @@ When the race ends the tower slides out and the results board slides in. It show
 
 ---
 
+**When the boards come in:** in the Boards tab, *When the boards come in*. After a race the results board comes in first. The skill luck, match and standings boards each come in either *After the one before* (one at a time, the default) or *Together with the results*, so all boards are on screen at once. Each has extra seconds of waiting time, and *Show all at once* sets them all together. Put every board in its own place in OBS.
+
 ## 🧱 Tower options
 
 All in the **Look** tab:

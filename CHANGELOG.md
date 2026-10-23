@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.5
+
+- **New:** **When the boards come in** (Boards tab). The skill luck board, the match board and the standings board can each come in **one after the other** (as before) or **together with the results board**, so you can show all of them at once. Each one also has extra seconds of waiting time, and the results board has its own delay too. *Show all at once* and *One after the other* set all of them in one click.
+- **Note:** nothing changes unless you change it. Boards that come in together appear at the same time, so give each one its own place in OBS.
+
 ## 1.9.4
 
 - **New:** **team match (draft)**, for team events. The new **Draft** tab holds two teams (name, colour, players, drafted umas). After every race the best placed team players score for their team (**4 / 2 / 1** points, changeable) and the first team to reach the target (**25**, changeable) wins. Players on no team (NPCs) never score; the next team player takes the placement.

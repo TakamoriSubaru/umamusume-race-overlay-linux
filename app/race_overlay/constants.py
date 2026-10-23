@@ -119,6 +119,13 @@ DEFAULT_SETTINGS = {
     "standings_layout": "portrait",   # "portrait" = one column, "landscape" = two columns side by side
     "standings_avatars": True,        # a picture for every player (from the People tab (Players), else a letter)
     "standings_every": 1,             # show the standings after every N races (0 = only when I show them)
+    "results_delay": 0.0,             # extra seconds before the results board comes in
+    "luck_when": "after",             # "after" = once the board before it has gone, "with" = together with the results board
+    "luck_delay": 0.0,                # extra seconds for the luck board
+    "match_when": "after",
+    "match_delay": 0.0,
+    "standings_when": "after",
+    "standings_delay": 0.0,
     "match_mode": False,              # team match (draft): points go to teams, not to single players
     "match_board": True,              # show the match board after the results board
     "match_seconds": 0.0,             # how long the match board stays (0 = until the next race)
@@ -148,7 +155,8 @@ KEEP_ON_RESET = ("source", "saved_races_dir", "watch_subfolders", "start_delay",
                  "standings_view", "standings_round_blocks", "standings_total_cols", "standings_border_values",
                  "standings_top_n", "standings_hide_zero", "standings_layout", "standings_avatars", "standings_every",
                  "standings_title", "standings_rows", "standings_page_seconds", "standings_refresh", "quick_start_open", "luck_board",
-                 "luck_seconds", "match_mode", "match_board", "match_seconds", "match_title", "match_show_picks")
+                 "luck_seconds", "match_mode", "match_board", "match_seconds", "match_title", "match_show_picks",
+                 "results_delay", "luck_when", "luck_delay", "match_when", "match_delay", "standings_when", "standings_delay")
 
 
 # Colour sets for the Look tab. Each one only changes colours.
